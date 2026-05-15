@@ -154,7 +154,7 @@ const translations: Record<Language, Record<string, string>> = {
     'models.temperature': 'Temperature',
     'models.save': '保存模型',
     'models.configured': '已配置模型',
-    'models.endpointCount': '{count} 个端点',
+    'models.endpointCount': '{count} 个模型',
     'models.saved': '模型已保存：{name}',
     'models.title': '模型连接',
     'models.subtitle': '按平台连接端点，拉取可用模型，然后把常用模型加入聊天切换器。',
@@ -172,6 +172,7 @@ const translations: Record<Language, Record<string, string>> = {
     'models.defaultStartupPlaceholder': '选择一个默认模型',
     'models.noDiscovered': '输入 Base URL 和密钥后获取模型；如果厂商不支持列表接口，也可以手动输入模型 ID。',
     'models.apiKeyHint': '密钥只写入后端数据库，列表中不会明文显示。留空保存时可后续编辑。',
+    'models.apiKeyRequired': '这个官方云平台获取模型列表需要先填写 API Key。你也可以直接勾选推荐模型或手动输入模型 ID，保存后再到已配置模型里补 Key。',
     'models.keySet': '已保存密钥',
     'models.keyMissing': '未设置密钥',
     'models.edit': '编辑',
@@ -295,7 +296,7 @@ const translations: Record<Language, Record<string, string>> = {
     'models.temperature': 'Temperature',
     'models.save': 'Save model',
     'models.configured': 'Configured models',
-    'models.endpointCount': '{count} endpoint(s)',
+    'models.endpointCount': '{count} model(s)',
     'models.saved': 'Model saved: {name}',
     'models.title': 'Model connections',
     'models.subtitle': 'Connect a provider endpoint, discover available models, then add the models you want in the chat switcher.',
@@ -313,6 +314,7 @@ const translations: Record<Language, Record<string, string>> = {
     'models.defaultStartupPlaceholder': 'Choose a default model',
     'models.noDiscovered': 'Enter a Base URL and key to fetch models. If a provider does not expose a list endpoint, add a model id manually.',
     'models.apiKeyHint': 'Keys are stored only in the backend database and never shown in the list. You can save models now and add the key later.',
+    'models.apiKeyRequired': 'This official cloud provider requires an API key to fetch the model list. You can select a suggested model or enter a model id manually, then add the key later from configured models.',
     'models.keySet': 'Key saved',
     'models.keyMissing': 'No key',
     'models.edit': 'Edit',
@@ -461,6 +463,21 @@ function formatDate(value?: string) {
 
 function normalizeApiBase(value: string) {
   return value.trim().replace(/\/+$/, '')
+}
+
+function needsApiKeyForModelDiscovery(provider: ModelProvider, baseUrl: string, apiKey: string) {
+  if (provider === 'local' || provider === 'ollama' || apiKey.trim()) return false
+  const normalized = normalizeApiBase(baseUrl).toLowerCase()
+  if (!normalized) return provider !== 'openai_compatible'
+  return [
+    'api.openai.com',
+    'api.anthropic.com',
+    'generativelanguage.googleapis.com',
+    'api.deepseek.com',
+    'dashscope.aliyuncs.com',
+    'api.moonshot.cn',
+    'openrouter.ai',
+  ].some((host) => normalized.includes(host))
 }
 
 function getStoredLanguage(): Language {
@@ -722,6 +739,11 @@ function App() {
   }
 
   async function handleDiscoverModels() {
+    if (needsApiKeyForModelDiscovery(modelForm.provider, modelForm.base_url, modelForm.api_key)) {
+      setNotice(t('models.apiKeyRequired'))
+      return
+    }
+
     setIsDiscoveringModels(true)
     try {
       const response = await api.discoverModels({
@@ -823,6 +845,10 @@ function App() {
   async function discoverDraftModels(model: ModelConfig) {
     const draft = modelDrafts[model.id]
     if (!draft) return
+    if (needsApiKeyForModelDiscovery(draft.provider, draft.base_url, draft.api_key)) {
+      setNotice(t('models.apiKeyRequired'))
+      return
+    }
     setRefreshingModelId(model.id)
     try {
       const response = await api.discoverModels({

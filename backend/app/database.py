@@ -23,87 +23,18 @@ DEFAULT_MODEL_CONFIGS = [
         "enabled": 1,
         "is_default": 1,
     },
-    {
-        "name": "Ollama Qwen 2.5",
-        "provider": "ollama",
-        "model": "qwen2.5:7b",
-        "base_url": "http://localhost:11434",
-        "api_key": "",
-        "temperature": 0.2,
-        "enabled": 0,
-        "is_default": 0,
-    },
-    {
-        "name": "OpenAI GPT-4.1 Mini",
-        "provider": "openai_compatible",
-        "model": "gpt-4.1-mini",
-        "base_url": "https://api.openai.com/v1",
-        "api_key": "",
-        "temperature": 0.2,
-        "enabled": 0,
-        "is_default": 0,
-    },
-    {
-        "name": "DeepSeek Chat",
-        "provider": "openai_compatible",
-        "model": "deepseek-chat",
-        "base_url": "https://api.deepseek.com/v1",
-        "api_key": "",
-        "temperature": 0.2,
-        "enabled": 0,
-        "is_default": 0,
-    },
-    {
-        "name": "Claude Sonnet",
-        "provider": "anthropic",
-        "model": "claude-3-5-sonnet-latest",
-        "base_url": "https://api.anthropic.com/v1",
-        "api_key": "",
-        "temperature": 0.2,
-        "enabled": 0,
-        "is_default": 0,
-    },
-    {
-        "name": "Gemini Flash",
-        "provider": "google",
-        "model": "gemini-1.5-flash",
-        "base_url": "https://generativelanguage.googleapis.com/v1beta",
-        "api_key": "",
-        "temperature": 0.2,
-        "enabled": 0,
-        "is_default": 0,
-    },
-    {
-        "name": "Qwen Plus",
-        "provider": "openai_compatible",
-        "model": "qwen-plus",
-        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "api_key": "",
-        "temperature": 0.2,
-        "enabled": 0,
-        "is_default": 0,
-    },
-    {
-        "name": "Kimi",
-        "provider": "openai_compatible",
-        "model": "moonshot-v1-8k",
-        "base_url": "https://api.moonshot.cn/v1",
-        "api_key": "",
-        "temperature": 0.2,
-        "enabled": 0,
-        "is_default": 0,
-    },
-    {
-        "name": "OpenRouter",
-        "provider": "openai_compatible",
-        "model": "openai/gpt-4.1-mini",
-        "base_url": "https://openrouter.ai/api/v1",
-        "api_key": "",
-        "temperature": 0.2,
-        "enabled": 0,
-        "is_default": 0,
-    },
 ]
+
+LEGACY_SEEDED_MODEL_KEYS = {
+    ("Ollama Qwen 2.5", "ollama", "qwen2.5:7b", "http://localhost:11434"),
+    ("OpenAI GPT-4.1 Mini", "openai_compatible", "gpt-4.1-mini", "https://api.openai.com/v1"),
+    ("DeepSeek Chat", "openai_compatible", "deepseek-chat", "https://api.deepseek.com/v1"),
+    ("Claude Sonnet", "anthropic", "claude-3-5-sonnet-latest", "https://api.anthropic.com/v1"),
+    ("Gemini Flash", "google", "gemini-1.5-flash", "https://generativelanguage.googleapis.com/v1beta"),
+    ("Qwen Plus", "openai_compatible", "qwen-plus", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+    ("Kimi", "openai_compatible", "moonshot-v1-8k", "https://api.moonshot.cn/v1"),
+    ("OpenRouter", "openai_compatible", "openai/gpt-4.1-mini", "https://openrouter.ai/api/v1"),
+}
 
 
 def now_iso() -> str:
@@ -127,6 +58,46 @@ def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
 
 def rows_to_dicts(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
     return [row_to_dict(row) or {} for row in rows]
+
+
+def cleanup_legacy_seeded_models(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT model_configs.*,
+               COUNT(DISTINCT conversations.id) AS conversation_count,
+               COUNT(DISTINCT messages.id) AS message_count
+        FROM model_configs
+        LEFT JOIN conversations ON conversations.model_id = model_configs.id
+        LEFT JOIN messages ON messages.model_id = model_configs.id
+        GROUP BY model_configs.id
+        """
+    ).fetchall()
+    for row in rows:
+        key = (row["name"], row["provider"], row["model"], row["base_url"])
+        is_unused = row["conversation_count"] == 0 and row["message_count"] == 0
+        if key in LEGACY_SEEDED_MODEL_KEYS and not row["api_key"] and is_unused:
+            conn.execute("DELETE FROM model_configs WHERE id = ?", (row["id"],))
+
+
+def normalize_model_defaults(conn: sqlite3.Connection) -> None:
+    enabled_defaults = conn.execute(
+        "SELECT id FROM model_configs WHERE enabled = 1 AND is_default = 1 ORDER BY id ASC"
+    ).fetchall()
+    if enabled_defaults:
+        keep_id = enabled_defaults[0]["id"]
+        conn.execute("UPDATE model_configs SET is_default = CASE WHEN id = ? THEN 1 ELSE 0 END", (keep_id,))
+        return
+
+    replacement = conn.execute(
+        """
+        SELECT id FROM model_configs
+        WHERE enabled = 1
+        ORDER BY CASE WHEN provider = 'local' THEN 0 ELSE 1 END, id ASC
+        LIMIT 1
+        """
+    ).fetchone()
+    if replacement is not None:
+        conn.execute("UPDATE model_configs SET is_default = CASE WHEN id = ? THEN 1 ELSE 0 END", (replacement["id"],))
 
 
 def init_db() -> None:
@@ -245,3 +216,6 @@ def init_db() -> None:
                     now,
                 ),
             )
+
+        cleanup_legacy_seeded_models(conn)
+        normalize_model_defaults(conn)

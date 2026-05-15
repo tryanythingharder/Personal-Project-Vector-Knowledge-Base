@@ -11,10 +11,15 @@
   box-sizing: border-box;
 }
 
+html,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  height: 100vh;
   overflow: hidden;
 }
 
@@ -32,7 +37,8 @@ button {
 .app-shell {
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   background:
     radial-gradient(circle at 28% 18%, rgba(82, 160, 136, 0.14), transparent 30%),
     radial-gradient(circle at 84% 72%, rgba(202, 126, 76, 0.1), transparent 32%),
@@ -195,7 +201,8 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: 100vh;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .topbar {
@@ -273,7 +280,7 @@ select option {
 }
 
 .topbar-controls select {
-  width: 190px;
+  width: clamp(180px, 16vw, 280px);
 }
 
 .icon-button,
@@ -622,6 +629,13 @@ select option {
   padding: 18px;
 }
 
+.models-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 28px;
+}
+
 .two-column-page {
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
@@ -777,9 +791,10 @@ select option {
 
 .model-workbench {
   display: grid;
-  grid-template-columns: 248px minmax(420px, 0.92fr) minmax(420px, 1.08fr);
+  grid-template-columns: minmax(210px, 248px) minmax(340px, 0.92fr) minmax(340px, 1.08fr);
+  align-items: start;
   gap: 12px;
-  min-height: calc(100vh - 150px);
+  min-height: 0;
 }
 
 .model-platform-panel,
@@ -805,6 +820,7 @@ select option {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
+  min-height: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -819,7 +835,7 @@ select option {
 }
 
 .model-platform-list {
-  max-height: calc(100vh - 220px);
+  max-height: min(720px, calc(100vh - 220px));
 }
 
 .model-platform {
@@ -977,7 +993,7 @@ select option {
 }
 
 .configured-models {
-  max-height: calc(100vh - 215px);
+  max-height: min(720px, calc(100vh - 215px));
 }
 
 .model-config-group {
@@ -1239,9 +1255,9 @@ select option {
   }
 }
 
-@media (max-width: 1440px) {
+@media (max-width: 1680px) {
   .model-workbench {
-    grid-template-columns: 230px minmax(0, 1fr);
+    grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
   }
 
   .model-configured-panel {

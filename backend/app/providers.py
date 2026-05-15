@@ -68,12 +68,35 @@ def _openai_base_url(base_url: str) -> str:
     return normalized
 
 
+def _provider_error(response: httpx.Response, provider: str) -> ModelDiscoveryError:
+    detail = response.text
+    try:
+        data = response.json()
+        if isinstance(data, dict):
+            error = data.get("error") or data.get("detail") or data
+            if isinstance(error, dict):
+                detail = error.get("message") or error.get("detail") or response.text
+            elif isinstance(error, str):
+                detail = error
+    except ValueError:
+        pass
+
+    lowered = detail.lower()
+    if response.status_code in {401, 403} or "bearer" in lowered or "api key" in lowered or "authentication" in lowered:
+        return ModelDiscoveryError(
+            f"{provider} rejected the model-list request because authentication is missing or invalid. "
+            "Fill in an API key first, or add a model id manually and set the key later."
+        )
+
+    return ModelDiscoveryError(f"{provider} model discovery failed: {detail[:500]}")
+
+
 async def _discover_ollama(base_url: str) -> list[dict[str, str]]:
     normalized = (base_url or "http://localhost:11434").rstrip("/")
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.get(f"{normalized}/api/tags")
         if response.status_code >= 400:
-            raise ModelDiscoveryError(response.text)
+            raise _provider_error(response, "Ollama")
         data = response.json()
     models = []
     for item in data.get("models", []):
@@ -92,7 +115,7 @@ async def _discover_openai_compatible(base_url: str, api_key: str) -> list[dict[
     async with httpx.AsyncClient(timeout=25) as client:
         response = await client.get(f"{normalized}/models", headers=headers)
         if response.status_code >= 400:
-            raise ModelDiscoveryError(response.text)
+            raise _provider_error(response, "OpenAI-compatible")
         data = response.json()
 
     items = data.get("data", []) if isinstance(data, dict) else data
@@ -116,7 +139,7 @@ async def _discover_anthropic(base_url: str, api_key: str) -> list[dict[str, str
     async with httpx.AsyncClient(timeout=25) as client:
         response = await client.get(f"{normalized}/models", headers=headers)
         if response.status_code >= 400:
-            raise ModelDiscoveryError(response.text)
+            raise _provider_error(response, "Anthropic")
         data = response.json()
 
     models = []
@@ -133,7 +156,7 @@ async def _discover_google(base_url: str, api_key: str) -> list[dict[str, str]]:
     async with httpx.AsyncClient(timeout=25) as client:
         response = await client.get(f"{normalized}/models", params=params)
         if response.status_code >= 400:
-            raise ModelDiscoveryError(response.text)
+            raise _provider_error(response, "Google Gemini")
         data = response.json()
 
     models = []
