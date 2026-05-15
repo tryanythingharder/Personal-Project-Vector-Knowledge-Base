@@ -16,9 +16,9 @@ if (-not (Test-Path $appDir)) {
   throw "Missing packaged app directory: $appDir"
 }
 
-$workDir = Join-Path $env:TEMP "ProjectVaultAgentInstaller"
-$targetInTemp = Join-Path $workDir "ProjectVault-Agent-Setup-$Version.exe"
-$targetInstaller = Join-Path $releaseDir "ProjectVault-Agent-Setup-$Version.exe"
+$workDir = Join-Path $env:TEMP "KortexInstaller"
+$targetInTemp = Join-Path $workDir "Kortex-Setup-$Version.exe"
+$targetInstaller = Join-Path $releaseDir "Kortex-Setup-$Version.exe"
 $zipPath = Join-Path $workDir "app.zip"
 $installScriptPath = Join-Path $workDir "install.ps1"
 $sedPath = Join-Path $workDir "installer.sed"
@@ -33,10 +33,10 @@ Compress-Archive -Path (Join-Path $appDir "*") -DestinationPath $zipPath -Compre
 $installScript = @'
 $ErrorActionPreference = "Stop"
 
-$installDir = Join-Path $env:LOCALAPPDATA "ProjectVault Agent"
+$installDir = Join-Path $env:LOCALAPPDATA "Kortex"
 $desktopDir = [Environment]::GetFolderPath("DesktopDirectory")
 $startMenuDir = Join-Path ([Environment]::GetFolderPath("StartMenu")) "Programs"
-$tempDir = Join-Path $env:TEMP ("ProjectVaultAgent_" + [guid]::NewGuid().ToString("N"))
+$tempDir = Join-Path $env:TEMP ("Kortex_" + [guid]::NewGuid().ToString("N"))
 $zipPath = Join-Path $PSScriptRoot "app.zip"
 
 function New-AppShortcut {
@@ -62,21 +62,21 @@ if (Test-Path $installDir) {
 
 Move-Item -LiteralPath $tempDir -Destination $installDir
 
-$exePath = Join-Path $installDir "ProjectVault Agent.exe"
-New-AppShortcut -ShortcutPath (Join-Path $desktopDir "ProjectVault Agent.lnk") -TargetPath $exePath
-New-AppShortcut -ShortcutPath (Join-Path $startMenuDir "ProjectVault Agent.lnk") -TargetPath $exePath
+$exePath = Join-Path $installDir "Kortex.exe"
+New-AppShortcut -ShortcutPath (Join-Path $desktopDir "Kortex.lnk") -TargetPath $exePath
+New-AppShortcut -ShortcutPath (Join-Path $startMenuDir "Kortex.lnk") -TargetPath $exePath
 
-$uninstallPath = Join-Path $installDir "Uninstall ProjectVault Agent.ps1"
+$uninstallPath = Join-Path $installDir "Uninstall Kortex.ps1"
 $uninstallScript = @"
 `$ErrorActionPreference = "SilentlyContinue"
 `$installDir = Split-Path -Parent `$MyInvocation.MyCommand.Path
-Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath("DesktopDirectory")) "ProjectVault Agent.lnk") -Force
-Remove-Item -LiteralPath (Join-Path (Join-Path ([Environment]::GetFolderPath("StartMenu")) "Programs") "ProjectVault Agent.lnk") -Force
+Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath("DesktopDirectory")) "Kortex.lnk") -Force
+Remove-Item -LiteralPath (Join-Path (Join-Path ([Environment]::GetFolderPath("StartMenu")) "Programs") "Kortex.lnk") -Force
 Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command Start-Sleep -Seconds 1; Remove-Item -LiteralPath ```"`$installDir```" -Recurse -Force"
 "@
 Set-Content -LiteralPath $uninstallPath -Value $uninstallScript -Encoding UTF8
 
-Write-Host "ProjectVault Agent installed. Use the desktop shortcut to open it."
+Write-Host "Kortex installed. Use the desktop shortcut to open it."
 '@
 
 Set-Content -LiteralPath $installScriptPath -Value $installScript -Encoding UTF8
@@ -98,7 +98,7 @@ InstallPrompt=
 DisplayLicense=
 FinishMessage=
 TargetName=$targetInTemp
-FriendlyName=ProjectVault Agent
+FriendlyName=Kortex
 AppLaunched=$powershellExe -NoProfile -ExecutionPolicy Bypass -File install.ps1
 PostInstallCmd=<None>
 AdminQuietInstCmd=$powershellExe -NoProfile -ExecutionPolicy Bypass -File install.ps1

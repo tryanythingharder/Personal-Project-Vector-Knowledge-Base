@@ -12,6 +12,99 @@ DATA_DIR = Path(os.getenv("KB_DATA_DIR", APP_ROOT / "data"))
 UPLOAD_DIR = DATA_DIR / "uploads"
 DB_PATH = DATA_DIR / "knowledge.sqlite3"
 
+DEFAULT_MODEL_CONFIGS = [
+    {
+        "name": "Local Evidence Answer",
+        "provider": "local",
+        "model": "extractive-rag",
+        "base_url": "",
+        "api_key": "",
+        "temperature": 0.2,
+        "enabled": 1,
+        "is_default": 1,
+    },
+    {
+        "name": "Ollama Qwen 2.5",
+        "provider": "ollama",
+        "model": "qwen2.5:7b",
+        "base_url": "http://localhost:11434",
+        "api_key": "",
+        "temperature": 0.2,
+        "enabled": 0,
+        "is_default": 0,
+    },
+    {
+        "name": "OpenAI GPT-4.1 Mini",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini",
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "",
+        "temperature": 0.2,
+        "enabled": 0,
+        "is_default": 0,
+    },
+    {
+        "name": "DeepSeek Chat",
+        "provider": "openai_compatible",
+        "model": "deepseek-chat",
+        "base_url": "https://api.deepseek.com/v1",
+        "api_key": "",
+        "temperature": 0.2,
+        "enabled": 0,
+        "is_default": 0,
+    },
+    {
+        "name": "Claude Sonnet",
+        "provider": "anthropic",
+        "model": "claude-3-5-sonnet-latest",
+        "base_url": "https://api.anthropic.com/v1",
+        "api_key": "",
+        "temperature": 0.2,
+        "enabled": 0,
+        "is_default": 0,
+    },
+    {
+        "name": "Gemini Flash",
+        "provider": "google",
+        "model": "gemini-1.5-flash",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "api_key": "",
+        "temperature": 0.2,
+        "enabled": 0,
+        "is_default": 0,
+    },
+    {
+        "name": "Qwen Plus",
+        "provider": "openai_compatible",
+        "model": "qwen-plus",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "api_key": "",
+        "temperature": 0.2,
+        "enabled": 0,
+        "is_default": 0,
+    },
+    {
+        "name": "Kimi",
+        "provider": "openai_compatible",
+        "model": "moonshot-v1-8k",
+        "base_url": "https://api.moonshot.cn/v1",
+        "api_key": "",
+        "temperature": 0.2,
+        "enabled": 0,
+        "is_default": 0,
+    },
+    {
+        "name": "OpenRouter",
+        "provider": "openai_compatible",
+        "model": "openai/gpt-4.1-mini",
+        "base_url": "https://openrouter.ai/api/v1",
+        "api_key": "",
+        "temperature": 0.2,
+        "enabled": 0,
+        "is_default": 0,
+    },
+]
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -121,43 +214,34 @@ def init_db() -> None:
         conn.execute(
             """
             INSERT OR IGNORE INTO projects (id, name, description, created_at, updated_at)
-            VALUES (1, '我的项目库', '用于沉淀做过的项目、需求文档、代码说明和交付记录。', ?, ?)
+            VALUES (1, 'Personal Projects', 'Store project requirements, delivery notes, technical decisions, retrospectives, and reusable experience.', ?, ?)
             """,
             (now, now),
         )
 
-        model_count = conn.execute("SELECT COUNT(*) AS count FROM model_configs").fetchone()["count"]
-        if model_count == 0:
-            conn.executemany(
+        existing_names = {
+            row["name"]
+            for row in conn.execute("SELECT name FROM model_configs").fetchall()
+        }
+        for config in DEFAULT_MODEL_CONFIGS:
+            if config["name"] in existing_names:
+                continue
+            conn.execute(
                 """
                 INSERT INTO model_configs
                 (name, provider, model, base_url, api_key, temperature, enabled, is_default, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                [
-                    (
-                        "本地检索回答",
-                        "local",
-                        "extractive-rag",
-                        "",
-                        "",
-                        0.2,
-                        1,
-                        1,
-                        now,
-                        now,
-                    ),
-                    (
-                        "Ollama Qwen",
-                        "ollama",
-                        "qwen2.5:7b",
-                        "http://localhost:11434",
-                        "",
-                        0.2,
-                        0,
-                        0,
-                        now,
-                        now,
-                    ),
-                ],
+                (
+                    config["name"],
+                    config["provider"],
+                    config["model"],
+                    config["base_url"],
+                    config["api_key"],
+                    config["temperature"],
+                    config["enabled"],
+                    config["is_default"],
+                    now,
+                    now,
+                ),
             )

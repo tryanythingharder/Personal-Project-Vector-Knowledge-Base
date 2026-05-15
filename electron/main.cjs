@@ -63,7 +63,7 @@ function waitForHealth(port, timeoutMs = 25000) {
 }
 
 function getPackagedBackendPath() {
-  const executable = process.platform === 'win32' ? 'projectvault-backend.exe' : 'projectvault-backend'
+  const executable = process.platform === 'win32' ? 'kortex-backend.exe' : 'kortex-backend'
   return path.join(process.resourcesPath, 'backend', executable)
 }
 
@@ -105,8 +105,9 @@ function createWindow(url) {
     height: 860,
     minWidth: 980,
     minHeight: 660,
-    title: 'ProjectVault Agent',
-    backgroundColor: '#f4f6f3',
+    title: 'Kortex',
+    backgroundColor: '#0c0d0e',
+    icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -127,7 +128,7 @@ app.whenReady().then(async () => {
     const url = process.env.APP_URL || (app.isPackaged ? await startPackagedBackend() : 'http://127.0.0.1:5180')
     createWindow(url)
   } catch (error) {
-    dialog.showErrorBox('ProjectVault Agent 启动失败', error instanceof Error ? error.message : String(error))
+    dialog.showErrorBox('Kortex failed to start', error instanceof Error ? error.message : String(error))
     app.quit()
   }
 

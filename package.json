@@ -1,10 +1,10 @@
 {
-  "name": "project-knowledge-agent",
+  "name": "kortex",
   "version": "0.1.0",
   "private": true,
   "main": "electron/main.cjs",
-  "author": "ProjectVault",
-  "description": "Desktop-first project knowledge base Agent with local RAG, chat history, model switching, admin views, and Docker deployment.",
+  "author": "Kortex",
+  "description": "Modern desktop vector knowledge base for personal project memory, RAG, model switching, remote backend sync, and Windows deployment.",
   "workspaces": [
     "frontend"
   ],
@@ -14,14 +14,14 @@
     "dev": "concurrently -k \"npm:dev:backend\" \"npm:dev:frontend\"",
     "desktop": "concurrently -k \"npm:dev:backend\" \"npm:dev:frontend\" \"wait-on http://127.0.0.1:5180 && electron electron/main.cjs\"",
     "build:frontend": "npm --workspace project-knowledge-agent-frontend run build",
-    "build:backend": ".\\.venv\\Scripts\\pyinstaller --noconfirm --clean --onefile --name projectvault-backend --paths backend --collect-submodules app --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --distpath dist\\backend --workpath build\\pyinstaller --specpath build\\pyinstaller backend\\run_backend.py",
+    "build:backend": ".\\.venv\\Scripts\\pyinstaller --noconfirm --clean --onefile --name kortex-backend --paths backend --collect-submodules app --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --distpath dist\\backend --workpath build\\pyinstaller --specpath build\\pyinstaller backend\\run_backend.py",
     "build:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\create-iexpress-installer.ps1",
     "build:desktop": "npm run build:frontend && npm run build:backend && electron-builder --dir && npm run build:installer",
     "build:desktop:unpacked": "npm run build:frontend && npm run build:backend && electron-builder --dir"
   },
   "build": {
-    "appId": "com.projectvault.agent",
-    "productName": "ProjectVault Agent",
+    "appId": "com.kortex.memory",
+    "productName": "Kortex",
     "directories": {
       "output": "release"
     },
@@ -31,8 +31,8 @@
     ],
     "extraResources": [
       {
-        "from": "dist/backend/projectvault-backend.exe",
-        "to": "backend/projectvault-backend.exe"
+        "from": "dist/backend/kortex-backend.exe",
+        "to": "backend/kortex-backend.exe"
       },
       {
         "from": "frontend/dist",
@@ -41,6 +41,7 @@
     ],
     "win": {
       "signAndEditExecutable": false,
+      "icon": "assets/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -55,7 +56,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "ProjectVault Agent"
+      "shortcutName": "Kortex"
     }
   },
   "devDependencies": {

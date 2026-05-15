@@ -1,46 +1,68 @@
-# ProjectVault Agent
+# Kortex
 
-一个本地优先的项目知识库 Agent 系统：文档上传、向量化、RAG 问答、多模型切换、聊天记录、后台管理、Electron 桌面入口和 Docker 部署。
+Kortex is a desktop-first vector knowledge base for personal project memory.
+It supports document upload, local vector retrieval, RAG answers, model
+switching, conversation history, admin visibility, Docker deployment, and a
+Windows installer.
 
-## 功能
+## Features
 
-- 文档入库：支持 `txt`、`md`、`pdf`、`docx`、代码文件和常见配置文件。
-- 本地向量化：默认使用离线 hashing 向量检索，不需要 API Key 也能先用。
-- RAG 问答：回答会返回引用片段、来源文件和相似度。
-- 多模型切换：内置本地检索回答、Ollama 配置，可添加 OpenAI-compatible 接口。
-- 聊天记录：会话和消息保存在 SQLite。
-- 后台管理：查看项目、文档、切片、会话和模型数量。
-- 桌面程序：`npm run desktop` 启动 Electron 可视化桌面壳。
-- Docker 部署：`docker compose up --build` 一键跑前后端。
+- Knowledge library: upload `txt`, `md`, `pdf`, `docx`, code files, and common
+  configuration files.
+- Local-first retrieval: the default hashing retriever works without an API key.
+- RAG chat: answers include evidence snippets, source files, and similarity
+  scores.
+- Mainstream model providers: local evidence answers, Ollama, OpenAI-compatible
+  APIs, Anthropic Claude, Google Gemini, DeepSeek, Qwen, Kimi, and OpenRouter.
+- Remote backend mode: point the desktop client at a server endpoint so multiple
+  devices share the same backend and database.
+- Conversation history: sessions and messages are stored in SQLite by default.
+- Admin view: inspect project, document, chunk, session, and model counts.
+- Desktop shell: Electron launches the packaged FastAPI backend and app UI.
+- Docker deployment: run the backend and frontend together for server hosting.
 
-## 本地开发
+## Local Development
 
 ```powershell
 python -m venv .venv
- .\.venv\Scripts\python -m pip install -r backend\requirements.txt
+.\.venv\Scripts\python -m pip install -r backend\requirements.txt
 npm.cmd install
 npm.cmd run dev
 ```
 
-访问前端：`http://127.0.0.1:5180`
+Frontend: `http://127.0.0.1:5180`
 
-后端健康检查：`http://127.0.0.1:8010/api/health`
+Backend health: `http://127.0.0.1:8010/api/health`
 
-## 桌面版
+## Desktop App
 
 ```powershell
 npm.cmd run desktop
 ```
 
-这个命令会同时启动 FastAPI、Vite 和 Electron 窗口。
+This starts FastAPI, Vite, and the Electron desktop window together.
 
-## Windows 安装包
+## Windows Installer
 
 ```powershell
 npm.cmd run build:desktop
 ```
 
-安装包会生成到 `release/ProjectVault-Agent-Setup-0.1.0.exe`。安装后桌面会出现 `ProjectVault Agent` 快捷方式，应用会自动启动内置后端和可视化界面，不需要手动打开命令行。
+The installer is generated at `release/Kortex-Setup-0.1.0.exe`. After
+installation, Kortex is available from the desktop shortcut and Start menu.
+
+## Remote Backend
+
+The desktop app can run in two modes:
+
+- Embedded mode: Electron starts the local packaged backend automatically.
+- Remote mode: open the Server view and set the API endpoint, for example
+  `https://kb.example.com`.
+
+For production server use, deploy the backend with Docker or a process manager
+and point every desktop client at the same endpoint. SQLite is fine for a single
+small deployment, while PostgreSQL plus pgvector is the recommended next step
+for multi-user or larger document collections.
 
 ## Docker
 
@@ -48,30 +70,34 @@ npm.cmd run build:desktop
 docker compose up --build
 ```
 
-访问：`http://127.0.0.1:8080`
+Open `http://127.0.0.1:8080`. SQLite data and uploaded files are stored in the
+`kb_data` Docker volume.
 
-SQLite 数据和上传文件保存在 Docker volume `kb_data`。
-
-## 连接模型
+## Model Setup
 
 ### Ollama
 
-1. 本机启动 Ollama。
-2. 拉取模型，例如 `ollama pull qwen2.5:7b`。
-3. 在“模型切换”里启用 `Ollama Qwen`，确认 Base URL 是 `http://localhost:11434`。
+1. Start Ollama locally.
+2. Pull a model such as `ollama pull qwen2.5:7b`.
+3. Enable the Ollama preset in the Models view and confirm the base URL is
+   `http://localhost:11434`.
 
-### OpenAI-compatible
+### Cloud Providers
 
-在“模型切换”里添加：
+Use the Models view to enable or add providers:
 
-- Provider: `OpenAI 兼容`
-- Model: 例如 `deepseek-chat`、`gpt-4.1-mini`、`qwen-plus`
-- Base URL: 对应供应商的 `/v1` 地址
-- API Key: 对应密钥
+- OpenAI-compatible: OpenAI, DeepSeek, Qwen DashScope compatible mode, Kimi, and
+  OpenRouter.
+- Anthropic: Claude via the Messages API.
+- Google: Gemini via the Generative Language API.
 
-## 建议入库内容
+API keys are stored in the local application database for the current backend.
+When using a remote backend, configure keys on that shared backend.
 
-- 做过项目的需求说明、开题报告、任务书、验收材料。
-- README、接口文档、数据库设计、部署说明。
-- 交付记录、客户修改意见、项目复盘。
-- 关键代码片段或模块说明。
+## Good Content To Store
+
+- Requirements, proposals, task briefs, acceptance notes, and retrospectives.
+- README files, API docs, database designs, deployment notes, and architecture
+  decisions.
+- Client feedback, change records, and project handoff notes.
+- Important code snippets or module explanations.

@@ -18,7 +18,7 @@ from .rag import build_citations, build_llm_messages, citations_to_json, local_a
 from .vectorizer import dumps_vector, embed
 
 
-app = FastAPI(title="Project Knowledge Agent", version="0.1.0")
+app = FastAPI(title="Kortex Knowledge Backend", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,9 +34,12 @@ class ProjectCreate(BaseModel):
     description: str = ""
 
 
+PROVIDER_PATTERN = "^(local|ollama|openai_compatible|anthropic|google)$"
+
+
 class ModelConfigIn(BaseModel):
     name: str
-    provider: str = Field(pattern="^(local|ollama|openai_compatible)$")
+    provider: str = Field(pattern=PROVIDER_PATTERN)
     model: str
     base_url: str = ""
     api_key: str = ""
@@ -47,7 +50,7 @@ class ModelConfigIn(BaseModel):
 
 class ModelConfigPatch(BaseModel):
     name: str | None = None
-    provider: str | None = Field(default=None, pattern="^(local|ollama|openai_compatible)$")
+    provider: str | None = Field(default=None, pattern=PROVIDER_PATTERN)
     model: str | None = None
     base_url: str | None = None
     api_key: str | None = None
@@ -154,11 +157,11 @@ async def upload_documents(
         try:
             text = extract_text(target_path, safe_name)
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"{safe_name} 解析失败：{exc}") from exc
+            raise HTTPException(status_code=400, detail=f"{safe_name} could not be parsed: {exc}") from exc
 
         chunks = split_text(text)
         if not chunks:
-            raise HTTPException(status_code=400, detail=f"{safe_name} 没有解析出可入库文本")
+            raise HTTPException(status_code=400, detail=f"{safe_name} did not contain readable text")
 
         now = now_iso()
         with get_conn() as conn:
@@ -305,7 +308,7 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
         now = now_iso()
         conversation_id = payload.conversation_id
         if conversation_id is None:
-            title = payload.message.strip().replace("\n", " ")[:36] or "新会话"
+            title = payload.message.strip().replace("\n", " ")[:36] or "New thread"
             cursor = conn.execute(
                 """
                 INSERT INTO conversations (title, project_id, model_id, created_at, updated_at)
@@ -335,7 +338,7 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
         answer = await generate_with_model(model, messages, payload.message, contexts)
     except ModelCallError as exc:
         fallback = local_answer(payload.message, contexts)
-        answer = f"{fallback}\n\n当前模型调用失败，已临时使用本地检索回答。错误信息：{str(exc)[:300]}"
+        answer = f"{fallback}\n\nCurrent model call failed, so Kortex used the local retrieval answer. Error: {str(exc)[:300]}"
 
     now = now_iso()
     with get_conn() as conn:

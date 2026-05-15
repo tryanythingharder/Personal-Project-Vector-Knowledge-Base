@@ -27,6 +27,12 @@ async def generate_with_model(
     if provider == "openai_compatible":
         return await _call_openai_compatible(model_config, messages)
 
+    if provider == "anthropic":
+        return await _call_anthropic(model_config, messages)
+
+    if provider == "google":
+        return await _call_google(model_config, messages)
+
     raise ModelCallError(f"Unsupported provider: {provider}")
 
 
@@ -64,3 +70,69 @@ async def _call_openai_compatible(model_config: dict[str, Any], messages: list[d
             raise ModelCallError(response.text)
         data = response.json()
         return data["choices"][0]["message"]["content"].strip()
+
+
+async def _call_anthropic(model_config: dict[str, Any], messages: list[dict[str, str]]) -> str:
+    base_url = (model_config.get("base_url") or "https://api.anthropic.com/v1").rstrip("/")
+    api_key = model_config.get("api_key") or ""
+    system = "\n\n".join(message["content"] for message in messages if message["role"] == "system")
+    user_messages = [
+        {"role": "assistant" if message["role"] == "assistant" else "user", "content": message["content"]}
+        for message in messages
+        if message["role"] != "system"
+    ]
+    payload: dict[str, Any] = {
+        "model": model_config["model"],
+        "max_tokens": 2000,
+        "temperature": model_config.get("temperature", 0.2),
+        "messages": user_messages,
+    }
+    if system:
+        payload["system"] = system
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+    }
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post(f"{base_url}/messages", json=payload, headers=headers)
+        if response.status_code >= 400:
+            raise ModelCallError(response.text)
+        data = response.json()
+        return "".join(part.get("text", "") for part in data.get("content", [])).strip()
+
+
+async def _call_google(model_config: dict[str, Any], messages: list[dict[str, str]]) -> str:
+    base_url = (model_config.get("base_url") or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+    api_key = model_config.get("api_key") or ""
+    system = "\n\n".join(message["content"] for message in messages if message["role"] == "system")
+    contents = []
+    for message in messages:
+        if message["role"] == "system":
+            continue
+        role = "model" if message["role"] == "assistant" else "user"
+        contents.append({"role": role, "parts": [{"text": message["content"]}]})
+
+    payload: dict[str, Any] = {
+        "contents": contents,
+        "generationConfig": {"temperature": model_config.get("temperature", 0.2)},
+    }
+    if system:
+        payload["systemInstruction"] = {"parts": [{"text": system}]}
+
+    params = {"key": api_key} if api_key else {}
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post(
+            f"{base_url}/models/{model_config['model']}:generateContent",
+            json=payload,
+            params=params,
+        )
+        if response.status_code >= 400:
+            raise ModelCallError(response.text)
+        data = response.json()
+        candidates = data.get("candidates", [])
+        if not candidates:
+            return ""
+        parts = candidates[0].get("content", {}).get("parts", [])
+        return "".join(part.get("text", "") for part in parts).strip()

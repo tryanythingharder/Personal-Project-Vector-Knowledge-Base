@@ -24,7 +24,7 @@ export type DocumentItem = {
 export type ModelConfig = {
   id: number
   name: string
-  provider: 'local' | 'ollama' | 'openai_compatible'
+  provider: 'local' | 'ollama' | 'openai_compatible' | 'anthropic' | 'google'
   model: string
   base_url: string
   temperature: number

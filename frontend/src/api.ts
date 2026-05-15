@@ -8,10 +8,25 @@ import type {
   Project,
 } from './types'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+const API_BASE_STORAGE_KEY = 'kortex.apiBaseUrl'
+
+export function getApiBase() {
+  if (typeof window === 'undefined') return import.meta.env.VITE_API_BASE_URL || ''
+  return localStorage.getItem(API_BASE_STORAGE_KEY) || import.meta.env.VITE_API_BASE_URL || ''
+}
+
+export function setApiBase(value: string) {
+  const normalized = value.trim().replace(/\/+$/, '')
+  if (normalized) {
+    localStorage.setItem(API_BASE_STORAGE_KEY, normalized)
+  } else {
+    localStorage.removeItem(API_BASE_STORAGE_KEY)
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const apiBase = getApiBase()
+  const response = await fetch(`${apiBase}${path}`, {
     ...init,
     headers: init?.body instanceof FormData ? init.headers : { 'Content-Type': 'application/json', ...init?.headers },
   })

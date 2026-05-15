@@ -2,40 +2,117 @@ import {
   Activity,
   Bot,
   Check,
+  Cloud,
   Database,
   FileText,
+  Globe2,
+  HardDrive,
   History,
   Layers3,
   Loader2,
   MessageSquareText,
-  PanelLeft,
   Plus,
   RefreshCcw,
   Search,
   Send,
-  ServerCog,
+  Server,
   Settings2,
+  Shield,
+  Sparkles,
   Trash2,
   Upload,
+  Wifi,
 } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api } from './api'
+import { api, getApiBase, setApiBase } from './api'
 import type { AdminStats, ChatMessage, Citation, ConversationSummary, DocumentItem, ModelConfig, Project } from './types'
 
-type View = 'chat' | 'knowledge' | 'models' | 'admin'
+type View = 'chat' | 'knowledge' | 'models' | 'server' | 'admin'
+
+type ModelPreset = {
+  name: string
+  provider: ModelConfig['provider']
+  model: string
+  base_url: string
+  note: string
+}
+
+const PRODUCT_NAME = 'Kortex'
 
 const navItems: Array<{ id: View; label: string; icon: typeof MessageSquareText }> = [
-  { id: 'chat', label: 'RAG 问答', icon: MessageSquareText },
-  { id: 'knowledge', label: '知识库', icon: Database },
-  { id: 'models', label: '模型切换', icon: Layers3 },
-  { id: 'admin', label: '后台管理', icon: ServerCog },
+  { id: 'chat', label: 'Ask', icon: MessageSquareText },
+  { id: 'knowledge', label: 'Library', icon: Database },
+  { id: 'models', label: 'Models', icon: Layers3 },
+  { id: 'server', label: 'Server', icon: Cloud },
+  { id: 'admin', label: 'Admin', icon: Activity },
 ]
 
 const providerLabels: Record<ModelConfig['provider'], string> = {
-  local: '本地检索',
+  local: 'Local RAG',
   ollama: 'Ollama',
-  openai_compatible: 'OpenAI 兼容',
+  openai_compatible: 'OpenAI-compatible',
+  anthropic: 'Anthropic',
+  google: 'Google Gemini',
 }
+
+const modelPresets: ModelPreset[] = [
+  {
+    name: 'OpenAI GPT-4.1 Mini',
+    provider: 'openai_compatible',
+    model: 'gpt-4.1-mini',
+    base_url: 'https://api.openai.com/v1',
+    note: 'OpenAI API',
+  },
+  {
+    name: 'Anthropic Claude Sonnet',
+    provider: 'anthropic',
+    model: 'claude-3-5-sonnet-latest',
+    base_url: 'https://api.anthropic.com/v1',
+    note: 'Claude Messages API',
+  },
+  {
+    name: 'Google Gemini Flash',
+    provider: 'google',
+    model: 'gemini-1.5-flash',
+    base_url: 'https://generativelanguage.googleapis.com/v1beta',
+    note: 'Google AI Studio key',
+  },
+  {
+    name: 'DeepSeek Chat',
+    provider: 'openai_compatible',
+    model: 'deepseek-chat',
+    base_url: 'https://api.deepseek.com/v1',
+    note: 'OpenAI-compatible',
+  },
+  {
+    name: 'Qwen Plus',
+    provider: 'openai_compatible',
+    model: 'qwen-plus',
+    base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    note: 'DashScope compatible mode',
+  },
+  {
+    name: 'Kimi',
+    provider: 'openai_compatible',
+    model: 'moonshot-v1-8k',
+    base_url: 'https://api.moonshot.cn/v1',
+    note: 'Moonshot compatible API',
+  },
+  {
+    name: 'OpenRouter',
+    provider: 'openai_compatible',
+    model: 'openai/gpt-4.1-mini',
+    base_url: 'https://openrouter.ai/api/v1',
+    note: 'Route to many hosted models',
+  },
+  {
+    name: 'Local Ollama Qwen',
+    provider: 'ollama',
+    model: 'qwen2.5:7b',
+    base_url: 'http://localhost:11434',
+    note: 'Private local model',
+  },
+]
 
 function formatDate(value?: string) {
   if (!value) return '-'
@@ -45,6 +122,10 @@ function formatDate(value?: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+function normalizeApiBase(value: string) {
+  return value.trim().replace(/\/+$/, '')
 }
 
 function App() {
@@ -64,9 +145,11 @@ function App() {
   const [isSending, setIsSending] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [files, setFiles] = useState<FileList | null>(null)
+  const [apiBaseInput, setApiBaseInput] = useState(getApiBase())
+  const [connectionState, setConnectionState] = useState<'checking' | 'online' | 'offline'>('checking')
   const [newProject, setNewProject] = useState({ name: '', description: '' })
   const [modelForm, setModelForm] = useState({
-    name: 'DeepSeek / OpenAI 兼容',
+    name: 'DeepSeek Chat',
     provider: 'openai_compatible' as ModelConfig['provider'],
     model: 'deepseek-chat',
     base_url: 'https://api.deepseek.com/v1',
@@ -89,6 +172,7 @@ function App() {
   }, [messages])
 
   const refreshAll = useCallback(async () => {
+    setConnectionState('checking')
     const [projectData, modelData, conversationData, statsData] = await Promise.all([
       api.projects(),
       api.models(),
@@ -102,13 +186,16 @@ function App() {
     const defaultProjectId = selectedProjectId || projectData[0]?.id || 1
     setSelectedProjectId(defaultProjectId)
     setSelectedModelId((current) => current ?? modelData.find((model) => model.is_default)?.id ?? modelData[0]?.id)
-    const docs = await api.documents(defaultProjectId)
-    setDocuments(docs)
+    setDocuments(await api.documents(defaultProjectId))
+    setConnectionState('online')
   }, [selectedProjectId])
 
   useEffect(() => {
     refreshAll()
-      .catch((error) => setNotice(error.message))
+      .catch((error) => {
+        setConnectionState('offline')
+        setNotice(error.message)
+      })
       .finally(() => setIsLoading(false))
   }, [refreshAll])
 
@@ -127,7 +214,7 @@ function App() {
     const created = await api.createProject(newProject)
     setNewProject({ name: '', description: '' })
     setSelectedProjectId(created.id)
-    setNotice(`已创建项目：${created.name}`)
+    setNotice(`Project created: ${created.name}`)
     await refreshAll()
   }
 
@@ -137,10 +224,10 @@ function App() {
     try {
       const result = await api.uploadDocuments(selectedProject.id, files)
       setFiles(null)
-      setNotice(`已入库 ${result.uploaded.length} 个文件`)
+      setNotice(`Indexed ${result.uploaded.length} file(s).`)
       await refreshAll()
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '上传失败')
+      setNotice(error instanceof Error ? error.message : 'Upload failed')
     } finally {
       setIsUploading(false)
     }
@@ -148,7 +235,7 @@ function App() {
 
   async function handleDeleteDocument(id: number) {
     await api.deleteDocument(id)
-    setNotice('文档已删除')
+    setNotice('Document removed.')
     await refreshAll()
   }
 
@@ -182,7 +269,7 @@ function App() {
         ...current,
         {
           role: 'assistant',
-          content: error instanceof Error ? `请求失败：${error.message}` : '请求失败',
+          content: error instanceof Error ? `Request failed: ${error.message}` : 'Request failed.',
         },
       ])
     } finally {
@@ -201,7 +288,7 @@ function App() {
   async function handleCreateModel(event: FormEvent) {
     event.preventDefault()
     const created = await api.createModel({ ...modelForm, enabled: true, is_default: false })
-    setNotice(`已添加模型：${created.name}`)
+    setNotice(`Model saved: ${created.name}`)
     setModelForm((current) => ({ ...current, api_key: '' }))
     await refreshAll()
   }
@@ -211,22 +298,52 @@ function App() {
     await refreshAll()
   }
 
-  const healthLabel = isLoading ? '连接中' : '本地服务正常'
+  async function handleSaveServer(event: FormEvent) {
+    event.preventDefault()
+    setApiBase(apiBaseInput)
+    setNotice(apiBaseInput.trim() ? 'Remote server saved. All API calls now use that backend.' : 'Switched back to the bundled local backend.')
+    await refreshAll()
+  }
+
+  async function handleTestServer() {
+    const base = normalizeApiBase(apiBaseInput)
+    try {
+      const response = await fetch(`${base}/api/health`)
+      if (!response.ok) throw new Error(response.statusText)
+      setNotice('Server connection succeeded.')
+    } catch (error) {
+      setNotice(error instanceof Error ? `Server test failed: ${error.message}` : 'Server test failed.')
+    }
+  }
+
+  function applyPreset(preset: ModelPreset) {
+    setModelForm({
+      name: preset.name,
+      provider: preset.provider,
+      model: preset.model,
+      base_url: preset.base_url,
+      api_key: '',
+      temperature: 0.2,
+    })
+  }
+
+  const activeApiBase = getApiBase()
+  const connectionLabel = connectionState === 'online' ? 'Online' : connectionState === 'checking' ? 'Checking' : 'Offline'
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-block">
-          <div className="brand-mark">
-            <Bot size={22} />
+          <div className="brand-mark" aria-hidden="true">
+            <Sparkles size={22} />
           </div>
           <div>
-            <strong>ProjectVault</strong>
-            <span>Agent 工作台</span>
+            <strong>{PRODUCT_NAME}</strong>
+            <span>Project memory OS</span>
           </div>
         </div>
 
-        <nav className="nav-list" aria-label="主导航">
+        <nav className="nav-list" aria-label="Primary navigation">
           {navItems.map((item) => {
             const Icon = item.icon
             return (
@@ -239,18 +356,21 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="status-dot" />
-          <span>{healthLabel}</span>
+          <div className={`status-dot ${connectionState}`} />
+          <div>
+            <strong>{connectionLabel}</strong>
+            <span>{activeApiBase || 'Bundled backend'}</span>
+          </div>
         </div>
       </aside>
 
       <main className="workspace">
         <header className="topbar">
           <div className="topbar-title">
-            <PanelLeft size={18} />
+            <Bot size={19} />
             <div>
-              <span>当前知识域</span>
-              <strong>{selectedProject?.name ?? '我的项目库'}</strong>
+              <span>Workspace</span>
+              <strong>{selectedProject?.name ?? 'Personal Projects'}</strong>
             </div>
           </div>
           <div className="topbar-controls">
@@ -270,7 +390,7 @@ function App() {
                   </option>
                 ))}
             </select>
-            <button className="icon-button" title="刷新" onClick={() => refreshAll()}>
+            <button className="icon-button" title="Refresh" onClick={() => refreshAll()}>
               <RefreshCcw size={17} />
             </button>
           </div>
@@ -279,13 +399,14 @@ function App() {
         {notice && (
           <div className="notice" role="status">
             <span>{notice}</span>
-            <button onClick={() => setNotice('')}>关闭</button>
+            <button onClick={() => setNotice('')}>Dismiss</button>
           </div>
         )}
 
         {activeView === 'chat' && renderChat()}
         {activeView === 'knowledge' && renderKnowledge()}
         {activeView === 'models' && renderModels()}
+        {activeView === 'server' && renderServer()}
         {activeView === 'admin' && renderAdmin()}
       </main>
     </div>
@@ -297,7 +418,7 @@ function App() {
         <aside className="conversation-rail">
           <div className="section-heading">
             <History size={17} />
-            <span>聊天记录</span>
+            <span>Sessions</span>
           </div>
           <button
             className="primary-button full-width"
@@ -307,7 +428,7 @@ function App() {
             }}
           >
             <Plus size={16} />
-            新会话
+            New thread
           </button>
           <div className="conversation-list">
             {conversations.map((conversation) => (
@@ -318,7 +439,7 @@ function App() {
               >
                 <strong>{conversation.title}</strong>
                 <span>
-                  {conversation.project_name || '全部项目'} · {formatDate(conversation.updated_at)}
+                  {conversation.project_name || 'All projects'} / {formatDate(conversation.updated_at)}
                 </span>
               </button>
             ))}
@@ -329,14 +450,23 @@ function App() {
           <div className="chat-stream">
             {messages.length === 0 && (
               <div className="empty-state">
-                <Search size={26} />
-                <h2>问你的项目资料</h2>
-                <p>上传需求文档、README、交付说明或复盘记录后，可以让 Agent 帮你总结方案、查功能点、整理经验。</p>
+                <div className="empty-mark">
+                  <Search size={28} />
+                </div>
+                <h2>Ask across your project memory</h2>
+                <p>Upload requirements, handoff notes, README files, design decisions, and retrospectives. Kortex will retrieve the closest evidence before answering.</p>
+                <div className="prompt-row">
+                  {['Summarize this project', 'Find deployment steps', 'Extract reusable lessons'].map((prompt) => (
+                    <button key={prompt} onClick={() => setQuestion(prompt)}>
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             {messages.map((message, index) => (
               <article key={`${message.role}-${index}`} className={`message ${message.role}`}>
-                <div className="message-role">{message.role === 'user' ? '你' : selectedModel?.name || 'Agent'}</div>
+                <div className="message-role">{message.role === 'user' ? 'You' : selectedModel?.name || PRODUCT_NAME}</div>
                 <div className="message-content">{message.content}</div>
                 {!!message.citations?.length && (
                   <div className="inline-citations">
@@ -349,10 +479,10 @@ function App() {
             ))}
             {isSending && (
               <article className="message assistant">
-                <div className="message-role">Agent</div>
+                <div className="message-role">{PRODUCT_NAME}</div>
                 <div className="message-content loading-line">
                   <Loader2 size={16} className="spin" />
-                  正在检索知识库并生成回答
+                  Retrieving evidence and composing an answer
                 </div>
               </article>
             )}
@@ -363,10 +493,10 @@ function App() {
             <textarea
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
-              placeholder="例如：总结一下这个项目的核心功能和技术方案"
+              placeholder="Ask about a project, decision, module, deployment, bug, or lesson learned..."
               rows={3}
             />
-            <button className="send-button" type="submit" disabled={isSending || !question.trim()} title="发送">
+            <button className="send-button" type="submit" disabled={isSending || !question.trim()} title="Send">
               {isSending ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
             </button>
           </form>
@@ -375,10 +505,10 @@ function App() {
         <aside className="inspector">
           <div className="section-heading">
             <FileText size={17} />
-            <span>检索依据</span>
+            <span>Evidence</span>
           </div>
           {latestCitations.length === 0 ? (
-            <p className="muted">回答后这里会显示引用片段、来源文件和相似度。</p>
+            <p className="muted">Cited chunks, source files, and similarity scores appear here after an answer.</p>
           ) : (
             <div className="citation-list">
               {latestCitations.map((citation) => (
@@ -403,60 +533,56 @@ function App() {
         <div className="panel">
           <div className="section-heading">
             <Upload size={17} />
-            <span>文档入库</span>
+            <span>Ingest</span>
           </div>
           <label className="file-drop">
             <input type="file" multiple onChange={(event) => setFiles(event.target.files)} />
             <Upload size={22} />
-            <strong>{files?.length ? `已选择 ${files.length} 个文件` : '选择项目文档'}</strong>
-            <span>支持 txt、md、pdf、docx、代码文件和常见配置文件</span>
+            <strong>{files?.length ? `${files.length} file(s) selected` : 'Drop project files into memory'}</strong>
+            <span>txt, md, pdf, docx, source code, logs, config files</span>
           </label>
           <button className="primary-button full-width" onClick={handleUpload} disabled={!files?.length || isUploading}>
             {isUploading ? <Loader2 size={16} className="spin" /> : <Upload size={16} />}
-            入库并向量化
+            Index documents
           </button>
 
           <form className="stacked-form" onSubmit={handleCreateProject}>
             <div className="section-heading compact">
               <Plus size={16} />
-              <span>新项目</span>
+              <span>New project space</span>
             </div>
-            <input
-              value={newProject.name}
-              onChange={(event) => setNewProject({ ...newProject, name: event.target.value })}
-              placeholder="项目名称"
-            />
+            <input value={newProject.name} onChange={(event) => setNewProject({ ...newProject, name: event.target.value })} placeholder="Project name" />
             <textarea
               value={newProject.description}
               onChange={(event) => setNewProject({ ...newProject, description: event.target.value })}
-              placeholder="项目说明"
+              placeholder="What belongs in this project?"
               rows={4}
             />
             <button className="secondary-button" type="submit">
               <Plus size={16} />
-              创建项目
+              Create project
             </button>
           </form>
         </div>
 
         <div className="panel wide">
           <div className="section-heading split">
-            <span>已入库文档</span>
-            <small>{documents.length} 个文件</small>
+            <span>Indexed files</span>
+            <small>{documents.length} file(s)</small>
           </div>
           <div className="table-list">
             {documents.map((document) => (
               <div className="table-row" key={document.id}>
                 <div>
                   <strong>{document.title}</strong>
-                  <span>{document.filename} · {document.chunk_count} 个切片 · {formatDate(document.created_at)}</span>
+                  <span>{document.filename} / {document.chunk_count} chunks / {formatDate(document.created_at)}</span>
                 </div>
-                <button className="icon-button danger" title="删除文档" onClick={() => handleDeleteDocument(document.id)}>
+                <button className="icon-button danger" title="Delete document" onClick={() => handleDeleteDocument(document.id)}>
                   <Trash2 size={16} />
                 </button>
               </div>
             ))}
-            {documents.length === 0 && <p className="muted">这个项目还没有文档。</p>}
+            {documents.length === 0 && <p className="muted">This project space does not have indexed files yet.</p>}
           </div>
         </div>
       </section>
@@ -465,71 +591,129 @@ function App() {
 
   function renderModels() {
     return (
-      <section className="two-column-page">
-        <form className="panel stacked-form" onSubmit={handleCreateModel}>
-          <div className="section-heading">
-            <Settings2 size={17} />
-            <span>添加模型</span>
-          </div>
-          <input value={modelForm.name} onChange={(event) => setModelForm({ ...modelForm, name: event.target.value })} placeholder="显示名称" />
-          <select
-            value={modelForm.provider}
-            onChange={(event) => setModelForm({ ...modelForm, provider: event.target.value as ModelConfig['provider'] })}
-          >
-            <option value="local">本地检索</option>
-            <option value="ollama">Ollama</option>
-            <option value="openai_compatible">OpenAI 兼容</option>
-          </select>
-          <input value={modelForm.model} onChange={(event) => setModelForm({ ...modelForm, model: event.target.value })} placeholder="模型名" />
-          <input value={modelForm.base_url} onChange={(event) => setModelForm({ ...modelForm, base_url: event.target.value })} placeholder="Base URL" />
-          <input
-            type="password"
-            value={modelForm.api_key}
-            onChange={(event) => setModelForm({ ...modelForm, api_key: event.target.value })}
-            placeholder="API Key"
-          />
-          <label className="range-row">
-            <span>Temperature</span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={modelForm.temperature}
-              onChange={(event) => setModelForm({ ...modelForm, temperature: Number(event.target.value) })}
-            />
-            <strong>{modelForm.temperature}</strong>
-          </label>
-          <button className="primary-button" type="submit">
-            <Plus size={16} />
-            保存模型
-          </button>
-        </form>
+      <section className="models-page">
+        <div className="preset-strip">
+          {modelPresets.map((preset) => (
+            <button key={preset.name} className="preset-button" onClick={() => applyPreset(preset)}>
+              <strong>{preset.name}</strong>
+              <span>{preset.note}</span>
+            </button>
+          ))}
+        </div>
 
-        <div className="panel wide">
-          <div className="section-heading split">
-            <span>模型列表</span>
-            <small>{models.length} 个配置</small>
+        <div className="two-column-page flush">
+          <form className="panel stacked-form" onSubmit={handleCreateModel}>
+            <div className="section-heading">
+              <Settings2 size={17} />
+              <span>Model endpoint</span>
+            </div>
+            <input value={modelForm.name} onChange={(event) => setModelForm({ ...modelForm, name: event.target.value })} placeholder="Display name" />
+            <select value={modelForm.provider} onChange={(event) => setModelForm({ ...modelForm, provider: event.target.value as ModelConfig['provider'] })}>
+              <option value="local">Local evidence answer</option>
+              <option value="ollama">Ollama</option>
+              <option value="openai_compatible">OpenAI-compatible</option>
+              <option value="anthropic">Anthropic Claude</option>
+              <option value="google">Google Gemini</option>
+            </select>
+            <input value={modelForm.model} onChange={(event) => setModelForm({ ...modelForm, model: event.target.value })} placeholder="Model id" />
+            <input value={modelForm.base_url} onChange={(event) => setModelForm({ ...modelForm, base_url: event.target.value })} placeholder="Base URL" />
+            <input type="password" value={modelForm.api_key} onChange={(event) => setModelForm({ ...modelForm, api_key: event.target.value })} placeholder="API key" />
+            <label className="range-row">
+              <span>Temperature</span>
+              <input type="range" min="0" max="1" step="0.1" value={modelForm.temperature} onChange={(event) => setModelForm({ ...modelForm, temperature: Number(event.target.value) })} />
+              <strong>{modelForm.temperature}</strong>
+            </label>
+            <button className="primary-button" type="submit">
+              <Plus size={16} />
+              Save model
+            </button>
+          </form>
+
+          <div className="panel wide">
+            <div className="section-heading split">
+              <span>Configured models</span>
+              <small>{models.length} endpoint(s)</small>
+            </div>
+            <div className="model-list">
+              {models.map((model) => (
+                <div className="model-row" key={model.id}>
+                  <div>
+                    <strong>{model.name}</strong>
+                    <span>{providerLabels[model.provider]} / {model.model}</span>
+                    {model.base_url && <small>{model.base_url}</small>}
+                  </div>
+                  <div className="row-actions">
+                    <button className={model.enabled ? 'chip active' : 'chip'} onClick={() => patchModel(model.id, { enabled: !model.enabled })}>
+                      {model.enabled ? 'Enabled' : 'Disabled'}
+                    </button>
+                    <button className={model.is_default ? 'chip active' : 'chip'} onClick={() => patchModel(model.id, { is_default: true })}>
+                      <Check size={14} />
+                      Default
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="model-list">
-            {models.map((model) => (
-              <div className="model-row" key={model.id}>
-                <div>
-                  <strong>{model.name}</strong>
-                  <span>{providerLabels[model.provider]} · {model.model}</span>
-                  {model.base_url && <small>{model.base_url}</small>}
-                </div>
-                <div className="row-actions">
-                  <button className={model.enabled ? 'chip active' : 'chip'} onClick={() => patchModel(model.id, { enabled: !model.enabled })}>
-                    {model.enabled ? '启用' : '停用'}
-                  </button>
-                  <button className={model.is_default ? 'chip active' : 'chip'} onClick={() => patchModel(model.id, { is_default: true })}>
-                    <Check size={14} />
-                    默认
-                  </button>
-                </div>
-              </div>
-            ))}
+        </div>
+      </section>
+    )
+  }
+
+  function renderServer() {
+    return (
+      <section className="server-page">
+        <div className="server-hero">
+          <div>
+            <div className="eyebrow">
+              <Wifi size={15} />
+              Shared backend mode
+            </div>
+            <h2>Point every device at the same knowledge base.</h2>
+            <p>Deploy the FastAPI backend on your server, keep SQLite or swap in a managed database later, then set this desktop app to that API URL. Your laptop, desktop, and future clients will read the same documents and chat history.</p>
+          </div>
+          <div className="server-mode">
+            <div>
+              <HardDrive size={18} />
+              <span>Local bundled backend</span>
+            </div>
+            <div>
+              <Globe2 size={18} />
+              <span>Remote API backend</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="two-column-page flush">
+          <form className="panel stacked-form" onSubmit={handleSaveServer}>
+            <div className="section-heading">
+              <Server size={17} />
+              <span>Backend endpoint</span>
+            </div>
+            <input value={apiBaseInput} onChange={(event) => setApiBaseInput(event.target.value)} placeholder="https://kb.your-domain.com or leave empty for local" />
+            <div className="button-row">
+              <button className="primary-button" type="submit">
+                <Check size={16} />
+                Save endpoint
+              </button>
+              <button className="secondary-button" type="button" onClick={handleTestServer}>
+                <Wifi size={16} />
+                Test
+              </button>
+            </div>
+            <p className="muted">The desktop app stores this endpoint locally. It does not rewrite the installed app.</p>
+          </form>
+
+          <div className="panel wide">
+            <div className="section-heading">
+              <Shield size={17} />
+              <span>Deployment notes</span>
+            </div>
+            <div className="note-list">
+              <p>Run the backend on your server with Docker Compose and expose HTTPS through Nginx, Caddy, or a cloud load balancer.</p>
+              <p>Keep `KB_DATA_DIR` on a persistent disk so uploads, SQLite data, and vectors survive redeploys.</p>
+              <p>For team or multi-device scale, the next backend step is replacing SQLite with PostgreSQL plus pgvector while keeping the desktop client unchanged.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -549,18 +733,18 @@ function App() {
             ))}
         </div>
 
-        <div className="two-column-page">
+        <div className="two-column-page flush">
           <div className="panel wide">
             <div className="section-heading">
               <FileText size={17} />
-              <span>最近文档</span>
+              <span>Recent documents</span>
             </div>
             <div className="table-list">
               {stats?.recent_documents.map((document) => (
                 <div className="table-row" key={document.id}>
                   <div>
                     <strong>{document.title}</strong>
-                    <span>{document.project_name} · {document.chunk_count} 个切片</span>
+                    <span>{document.project_name} / {document.chunk_count} chunks</span>
                   </div>
                   <small>{formatDate(document.created_at)}</small>
                 </div>
@@ -571,14 +755,14 @@ function App() {
           <div className="panel wide">
             <div className="section-heading">
               <Activity size={17} />
-              <span>最近会话</span>
+              <span>Recent sessions</span>
             </div>
             <div className="table-list">
               {stats?.recent_conversations.map((conversation) => (
                 <button className="table-row as-button" key={conversation.id} onClick={() => handleLoadConversation(conversation.id)}>
                   <div>
                     <strong>{conversation.title}</strong>
-                    <span>{conversation.project_name || '全部项目'}</span>
+                    <span>{conversation.project_name || 'All projects'}</span>
                   </div>
                   <small>{formatDate(conversation.updated_at)}</small>
                 </button>
@@ -593,11 +777,11 @@ function App() {
 
 function metricLabel(key: string) {
   const labels: Record<string, string> = {
-    projects: '项目',
-    documents: '文档',
-    chunks: '切片',
-    conversations: '会话',
-    models: '模型',
+    projects: 'Projects',
+    documents: 'Documents',
+    chunks: 'Chunks',
+    conversations: 'Threads',
+    models: 'Models',
   }
   return labels[key] ?? key
 }
