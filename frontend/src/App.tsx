@@ -12,6 +12,7 @@ import {
   Layers3,
   Loader2,
   MessageSquareText,
+  Pencil,
   Plus,
   RefreshCcw,
   Search,
@@ -23,20 +24,42 @@ import {
   Trash2,
   Upload,
   Wifi,
+  X,
 } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, getApiBase, setApiBase } from './api'
-import type { AdminStats, ChatMessage, Citation, ConversationSummary, DocumentItem, ModelConfig, Project } from './types'
+import type { AdminStats, ChatMessage, Citation, ConversationSummary, DiscoveredModel, DocumentItem, ModelConfig, ModelProvider, Project } from './types'
 
 type View = 'chat' | 'knowledge' | 'models' | 'server' | 'admin' | 'settings'
 type Language = 'zh' | 'en'
 
-type ModelPreset = {
+type ModelPlatform = {
+  id: string
   name: string
-  provider: ModelConfig['provider']
-  model: string
+  provider: ModelProvider
   base_url: string
   noteKey: string
+  models: string[]
+}
+
+type ModelFormState = {
+  platformId: string
+  provider: ModelProvider
+  base_url: string
+  api_key: string
+  temperature: number
+  manual_model: string
+  default_model: string
+}
+
+type ModelEditDraft = {
+  name: string
+  provider: ModelProvider
+  model: string
+  base_url: string
+  api_key: string
+  temperature: number
+  discovered: DiscoveredModel[]
 }
 
 const PRODUCT_NAME = 'Kortex'
@@ -75,6 +98,8 @@ const translations: Record<Language, Record<string, string>> = {
     'common.enabled': '已启用',
     'common.disabled': '已停用',
     'common.default': '默认',
+    'common.save': '保存',
+    'common.cancel': '取消',
     'chat.sessions': '会话',
     'chat.newThread': '新建会话',
     'chat.emptyTitle': '向你的项目记忆提问',
@@ -117,6 +142,7 @@ const translations: Record<Language, Record<string, string>> = {
     'models.preset.ollama': '本地私有模型',
     'models.endpoint': '模型端点',
     'models.displayName': '显示名称',
+    'models.providerLabel': '平台协议',
     'models.provider.local': '本地检索回答',
     'models.provider.ollama': 'Ollama',
     'models.provider.openai': 'OpenAI 兼容',
@@ -130,6 +156,32 @@ const translations: Record<Language, Record<string, string>> = {
     'models.configured': '已配置模型',
     'models.endpointCount': '{count} 个端点',
     'models.saved': '模型已保存：{name}',
+    'models.title': '模型连接',
+    'models.subtitle': '按平台连接端点，拉取可用模型，然后把常用模型加入聊天切换器。',
+    'models.platforms': '平台',
+    'models.connection': '连接',
+    'models.discovery': '可用模型',
+    'models.discover': '获取模型列表',
+    'models.discovering': '正在获取',
+    'models.discoveredCount': '发现 {count} 个模型',
+    'models.manualModel': '手动输入模型 ID',
+    'models.addManual': '加入列表',
+    'models.saveSelected': '添加选中模型',
+    'models.selectedCount': '已选择 {count} 个',
+    'models.defaultStartup': '默认启动模型',
+    'models.defaultStartupPlaceholder': '选择一个默认模型',
+    'models.noDiscovered': '输入 Base URL 和密钥后获取模型；如果厂商不支持列表接口，也可以手动输入模型 ID。',
+    'models.apiKeyHint': '密钥只写入后端数据库，列表中不会明文显示。留空保存时可后续编辑。',
+    'models.keySet': '已保存密钥',
+    'models.keyMissing': '未设置密钥',
+    'models.edit': '编辑',
+    'models.delete': '删除',
+    'models.refreshOne': '重新获取',
+    'models.savedBatch': '已更新 {count} 个模型。',
+    'models.updated': '模型已更新。',
+    'models.deleted': '模型已删除。',
+    'models.emptyConfigured': '还没有可切换模型。先选择平台并添加模型。',
+    'models.endpointGroup': '{provider} / {base}',
     'server.eyebrow': '共享后端模式',
     'server.title': '让每台设备指向同一个知识库。',
     'server.body': '后端部署到你的服务器后，桌面端只需要填写 API 地址，就能共用同一批文档、模型配置和聊天记录。',
@@ -187,6 +239,8 @@ const translations: Record<Language, Record<string, string>> = {
     'common.enabled': 'Enabled',
     'common.disabled': 'Disabled',
     'common.default': 'Default',
+    'common.save': 'Save',
+    'common.cancel': 'Cancel',
     'chat.sessions': 'Sessions',
     'chat.newThread': 'New thread',
     'chat.emptyTitle': 'Ask across your project memory',
@@ -229,6 +283,7 @@ const translations: Record<Language, Record<string, string>> = {
     'models.preset.ollama': 'Private local model',
     'models.endpoint': 'Model endpoint',
     'models.displayName': 'Display name',
+    'models.providerLabel': 'Provider protocol',
     'models.provider.local': 'Local evidence answer',
     'models.provider.ollama': 'Ollama',
     'models.provider.openai': 'OpenAI-compatible',
@@ -242,6 +297,32 @@ const translations: Record<Language, Record<string, string>> = {
     'models.configured': 'Configured models',
     'models.endpointCount': '{count} endpoint(s)',
     'models.saved': 'Model saved: {name}',
+    'models.title': 'Model connections',
+    'models.subtitle': 'Connect a provider endpoint, discover available models, then add the models you want in the chat switcher.',
+    'models.platforms': 'Platforms',
+    'models.connection': 'Connection',
+    'models.discovery': 'Available models',
+    'models.discover': 'Fetch model list',
+    'models.discovering': 'Fetching',
+    'models.discoveredCount': '{count} model(s) found',
+    'models.manualModel': 'Manual model id',
+    'models.addManual': 'Add to list',
+    'models.saveSelected': 'Add selected models',
+    'models.selectedCount': '{count} selected',
+    'models.defaultStartup': 'Default startup model',
+    'models.defaultStartupPlaceholder': 'Choose a default model',
+    'models.noDiscovered': 'Enter a Base URL and key to fetch models. If a provider does not expose a list endpoint, add a model id manually.',
+    'models.apiKeyHint': 'Keys are stored only in the backend database and never shown in the list. You can save models now and add the key later.',
+    'models.keySet': 'Key saved',
+    'models.keyMissing': 'No key',
+    'models.edit': 'Edit',
+    'models.delete': 'Delete',
+    'models.refreshOne': 'Fetch again',
+    'models.savedBatch': 'Updated {count} model(s).',
+    'models.updated': 'Model updated.',
+    'models.deleted': 'Model deleted.',
+    'models.emptyConfigured': 'No switchable models yet. Pick a platform and add models first.',
+    'models.endpointGroup': '{provider} / {base}',
     'server.eyebrow': 'Shared backend mode',
     'server.title': 'Point every device at the same knowledge base.',
     'server.body': 'Deploy the FastAPI backend on your server, then set this desktop app to that API URL. Your devices will share documents, model settings, and chat history.',
@@ -277,7 +358,7 @@ const translations: Record<Language, Record<string, string>> = {
   },
 }
 
-const providerLabels: Record<ModelConfig['provider'], string> = {
+const providerLabels: Record<ModelProvider, string> = {
   local: 'model.localRag',
   ollama: 'Ollama',
   openai_compatible: 'model.openaiCompatible',
@@ -285,62 +366,86 @@ const providerLabels: Record<ModelConfig['provider'], string> = {
   google: 'model.google',
 }
 
-const modelPresets: ModelPreset[] = [
+const modelPlatforms: ModelPlatform[] = [
   {
-    name: 'OpenAI GPT-4.1 Mini',
+    id: 'openai',
+    name: 'OpenAI / GPT',
     provider: 'openai_compatible',
-    model: 'gpt-4.1-mini',
     base_url: 'https://api.openai.com/v1',
     noteKey: 'models.preset.openai',
+    models: ['gpt-5.2', 'gpt-5.1', 'gpt-4.1', 'gpt-4.1-mini'],
   },
   {
-    name: 'Anthropic Claude Sonnet',
+    id: 'anthropic',
+    name: 'Anthropic Claude',
     provider: 'anthropic',
-    model: 'claude-3-5-sonnet-latest',
     base_url: 'https://api.anthropic.com/v1',
     noteKey: 'models.preset.anthropic',
+    models: ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-3-5-sonnet-latest'],
   },
   {
-    name: 'Google Gemini Flash',
+    id: 'google',
+    name: 'Google Gemini',
     provider: 'google',
-    model: 'gemini-1.5-flash',
     base_url: 'https://generativelanguage.googleapis.com/v1beta',
     noteKey: 'models.preset.google',
+    models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-1.5-flash'],
   },
   {
-    name: 'DeepSeek Chat',
+    id: 'deepseek',
+    name: 'DeepSeek',
     provider: 'openai_compatible',
-    model: 'deepseek-chat',
     base_url: 'https://api.deepseek.com/v1',
     noteKey: 'models.preset.compatible',
+    models: ['deepseek-chat', 'deepseek-reasoner'],
   },
   {
-    name: 'Qwen Plus',
+    id: 'qwen',
+    name: 'Qwen / DashScope',
     provider: 'openai_compatible',
-    model: 'qwen-plus',
     base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     noteKey: 'models.preset.qwen',
+    models: ['qwen-plus', 'qwen-max', 'qwen-turbo', 'qwen-long'],
   },
   {
-    name: 'Kimi',
+    id: 'kimi',
+    name: 'Kimi / Moonshot',
     provider: 'openai_compatible',
-    model: 'moonshot-v1-8k',
     base_url: 'https://api.moonshot.cn/v1',
     noteKey: 'models.preset.kimi',
+    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
   },
   {
+    id: 'openrouter',
     name: 'OpenRouter',
     provider: 'openai_compatible',
-    model: 'openai/gpt-4.1-mini',
     base_url: 'https://openrouter.ai/api/v1',
     noteKey: 'models.preset.openrouter',
+    models: ['openai/gpt-5.2', 'anthropic/claude-sonnet-4.5', 'google/gemini-2.5-pro'],
   },
   {
-    name: 'Local Ollama Qwen',
+    id: 'ollama',
+    name: 'Ollama',
     provider: 'ollama',
-    model: 'qwen2.5:7b',
     base_url: 'http://localhost:11434',
     noteKey: 'models.preset.ollama',
+    models: ['qwen2.5:7b', 'llama3.2', 'gemma3'],
+  },
+  {
+    id: 'compatible',
+    name: 'OpenAI Compatible',
+    provider: 'openai_compatible',
+    base_url: '',
+    noteKey: 'models.preset.compatible',
+    models: ['model-id'],
+  },
+  {
+    id: 'local',
+    name: 'Local RAG',
+    provider: 'local',
+    base_url: '',
+    noteKey: 'models.provider.local',
+    models: ['extractive-rag'],
   },
 ]
 
@@ -384,14 +489,21 @@ function App() {
   const [apiBaseInput, setApiBaseInput] = useState(getApiBase())
   const [connectionState, setConnectionState] = useState<'checking' | 'online' | 'offline'>('checking')
   const [newProject, setNewProject] = useState({ name: '', description: '' })
-  const [modelForm, setModelForm] = useState({
-    name: 'DeepSeek Chat',
-    provider: 'openai_compatible' as ModelConfig['provider'],
-    model: 'deepseek-chat',
-    base_url: 'https://api.deepseek.com/v1',
+  const [modelForm, setModelForm] = useState<ModelFormState>({
+    platformId: 'openai',
+    provider: 'openai_compatible',
+    base_url: 'https://api.openai.com/v1',
     api_key: '',
     temperature: 0.2,
+    manual_model: '',
+    default_model: '',
   })
+  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>(() => modelPlatforms[0].models.map((id) => ({ id, name: id })))
+  const [selectedDiscoveryIds, setSelectedDiscoveryIds] = useState<string[]>([])
+  const [isDiscoveringModels, setIsDiscoveringModels] = useState(false)
+  const [editingModelId, setEditingModelId] = useState<number | null>(null)
+  const [modelDrafts, setModelDrafts] = useState<Record<number, ModelEditDraft>>({})
+  const [refreshingModelId, setRefreshingModelId] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   const t = useCallback(
@@ -435,13 +547,31 @@ function App() {
     [language, t],
   )
 
+  const providerLabel = useCallback(
+    (provider: ModelProvider) => {
+      const label = providerLabels[provider]
+      return label ? t(label) : provider
+    },
+    [t],
+  )
+
+  const modelOptionLabel = useCallback(
+    (model: ModelConfig) => `${providerLabel(model.provider)} / ${model.model}`,
+    [providerLabel],
+  )
+
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? projects[0],
     [projects, selectedProjectId],
   )
+  const enabledModels = useMemo(() => models.filter((model) => model.enabled), [models])
   const selectedModel = useMemo(
-    () => models.find((model) => model.id === selectedModelId) ?? models.find((model) => model.is_default) ?? models[0],
-    [models, selectedModelId],
+    () => enabledModels.find((model) => model.id === selectedModelId) ?? enabledModels.find((model) => model.is_default) ?? enabledModels[0],
+    [enabledModels, selectedModelId],
+  )
+  const activePlatform = useMemo(
+    () => modelPlatforms.find((platform) => platform.id === modelForm.platformId) ?? modelPlatforms[0],
+    [modelForm.platformId],
   )
   const latestCitations = useMemo(() => {
     const assistant = [...messages].reverse().find((message) => message.role === 'assistant' && message.citations?.length)
@@ -462,7 +592,7 @@ function App() {
     setStats(statsData)
     const defaultProjectId = selectedProjectId || projectData[0]?.id || 1
     setSelectedProjectId(defaultProjectId)
-    setSelectedModelId((current) => current ?? modelData.find((model) => model.is_default)?.id ?? modelData[0]?.id)
+    setSelectedModelId((current) => current ?? modelData.find((model) => model.enabled && model.is_default)?.id ?? modelData.find((model) => model.enabled)?.id)
     setDocuments(await api.documents(defaultProjectId))
     setConnectionState('online')
   }, [selectedProjectId])
@@ -562,16 +692,173 @@ function App() {
     setActiveView('chat')
   }
 
-  async function handleCreateModel(event: FormEvent) {
-    event.preventDefault()
-    const created = await api.createModel({ ...modelForm, enabled: true, is_default: false })
-    setNotice(t('models.saved', { name: created.name }))
+  function seedPlatformModels(platform: ModelPlatform) {
+    return platform.models.map((id) => ({ id, name: id }))
+  }
+
+  function uniqueDiscovered(items: DiscoveredModel[]) {
+    const seen = new Set<string>()
+    return items.filter((item) => {
+      const id = item.id.trim()
+      if (!id || seen.has(id)) return false
+      seen.add(id)
+      return true
+    })
+  }
+
+  function selectModelPlatform(platform: ModelPlatform) {
+    const seeded = seedPlatformModels(platform)
+    setModelForm({
+      platformId: platform.id,
+      provider: platform.provider,
+      base_url: platform.base_url,
+      api_key: '',
+      temperature: 0.2,
+      manual_model: '',
+      default_model: seeded[0]?.id ?? '',
+    })
+    setDiscoveredModels(seeded)
+    setSelectedDiscoveryIds([])
+  }
+
+  async function handleDiscoverModels() {
+    setIsDiscoveringModels(true)
+    try {
+      const response = await api.discoverModels({
+        provider: modelForm.provider,
+        base_url: modelForm.base_url,
+        api_key: modelForm.api_key,
+      })
+      const found = uniqueDiscovered(response.models)
+      setDiscoveredModels(found)
+      setSelectedDiscoveryIds([])
+      setModelForm((current) => ({ ...current, default_model: found[0]?.id ?? '' }))
+      setNotice(t('models.discoveredCount', { count: found.length }))
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : t('chat.requestFailed'))
+    } finally {
+      setIsDiscoveringModels(false)
+    }
+  }
+
+  function toggleDiscoveredModel(modelId: string) {
+    setSelectedDiscoveryIds((current) => {
+      const next = current.includes(modelId) ? current.filter((id) => id !== modelId) : [...current, modelId]
+      setModelForm((form) => {
+        if (next.length === 0) return { ...form, default_model: '' }
+        if (next.includes(form.default_model)) return form
+        return { ...form, default_model: next[0] }
+      })
+      return next
+    })
+  }
+
+  function handleAddManualModel() {
+    const modelId = modelForm.manual_model.trim()
+    if (!modelId) return
+    setDiscoveredModels((current) => uniqueDiscovered([{ id: modelId, name: modelId }, ...current]))
+    setSelectedDiscoveryIds((current) => (current.includes(modelId) ? current : [modelId, ...current]))
+    setModelForm((current) => ({ ...current, manual_model: '', default_model: current.default_model || modelId }))
+  }
+
+  async function handleSaveSelectedModels() {
+    if (selectedDiscoveryIds.length === 0) return
+    const defaultModel = selectedDiscoveryIds.includes(modelForm.default_model) ? modelForm.default_model : selectedDiscoveryIds[0]
+
+    for (const modelId of selectedDiscoveryIds) {
+      const existing = models.find(
+        (model) =>
+          model.provider === modelForm.provider &&
+          normalizeApiBase(model.base_url || '') === normalizeApiBase(modelForm.base_url || '') &&
+          model.model === modelId,
+      )
+      const payload = {
+        name: modelForm.provider === 'local' ? 'Local Evidence Answer' : `${activePlatform.name} / ${modelId}`,
+        provider: modelForm.provider,
+        model: modelId,
+        base_url: modelForm.base_url,
+        temperature: modelForm.temperature,
+        enabled: true,
+        is_default: modelId === defaultModel,
+        api_key: modelForm.api_key,
+      }
+      if (existing) {
+        await api.patchModel(existing.id, payload)
+      } else {
+        await api.createModel(payload)
+      }
+    }
+
+    setNotice(t('models.savedBatch', { count: selectedDiscoveryIds.length }))
     setModelForm((current) => ({ ...current, api_key: '' }))
+    setSelectedDiscoveryIds([])
     await refreshAll()
   }
 
-  async function patchModel(id: number, payload: Partial<ModelConfig>) {
+  async function patchModel(id: number, payload: Partial<ModelConfig> & { api_key?: string }) {
     await api.patchModel(id, payload)
+    await refreshAll()
+  }
+
+  function startEditModel(model: ModelConfig) {
+    setEditingModelId(model.id)
+    setModelDrafts((current) => ({
+      ...current,
+      [model.id]: {
+        name: displayModelName(model.name),
+        provider: model.provider,
+        model: model.model,
+        base_url: model.base_url,
+        api_key: '',
+        temperature: model.temperature,
+        discovered: [],
+      },
+    }))
+  }
+
+  function updateModelDraft(id: number, patch: Partial<ModelEditDraft>) {
+    setModelDrafts((current) => ({ ...current, [id]: { ...current[id], ...patch } }))
+  }
+
+  async function discoverDraftModels(model: ModelConfig) {
+    const draft = modelDrafts[model.id]
+    if (!draft) return
+    setRefreshingModelId(model.id)
+    try {
+      const response = await api.discoverModels({
+        provider: draft.provider,
+        base_url: draft.base_url,
+        api_key: draft.api_key,
+      })
+      updateModelDraft(model.id, { discovered: uniqueDiscovered(response.models) })
+      setNotice(t('models.discoveredCount', { count: response.models.length }))
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : t('chat.requestFailed'))
+    } finally {
+      setRefreshingModelId(null)
+    }
+  }
+
+  async function saveEditedModel(model: ModelConfig) {
+    const draft = modelDrafts[model.id]
+    if (!draft) return
+    const payload: Partial<ModelConfig> & { api_key?: string } = {
+      name: draft.name,
+      provider: draft.provider,
+      model: draft.model,
+      base_url: draft.base_url,
+      temperature: draft.temperature,
+    }
+    if (draft.api_key.trim()) payload.api_key = draft.api_key.trim()
+    await api.patchModel(model.id, payload)
+    setEditingModelId(null)
+    setNotice(t('models.updated'))
+    await refreshAll()
+  }
+
+  async function deleteModel(id: number) {
+    await api.deleteModel(id)
+    setNotice(t('models.deleted'))
     await refreshAll()
   }
 
@@ -591,17 +878,6 @@ function App() {
     } catch (error) {
       setNotice(error instanceof Error ? `${t('server.testFailed')}: ${error.message}` : `${t('server.testFailed')}.`)
     }
-  }
-
-  function applyPreset(preset: ModelPreset) {
-    setModelForm({
-      name: preset.name,
-      provider: preset.provider,
-      model: preset.model,
-      base_url: preset.base_url,
-      api_key: '',
-      temperature: 0.2,
-    })
   }
 
   const activeApiBase = getApiBase()
@@ -665,13 +941,11 @@ function App() {
               ))}
             </select>
             <select value={selectedModel?.id ?? ''} onChange={(event) => setSelectedModelId(Number(event.target.value))}>
-              {models
-                .filter((model) => model.enabled)
-                .map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {displayModelName(model.name)}
-                  </option>
-                ))}
+              {enabledModels.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {modelOptionLabel(model)}
+                </option>
+              ))}
             </select>
             <button className="icon-button" title={t('common.refresh')} onClick={() => refreshAll()}>
               <RefreshCcw size={17} />
@@ -875,71 +1149,265 @@ function App() {
   }
 
   function renderModels() {
+    const modelGroups = Object.values(
+      models.reduce<Record<string, { provider: ModelProvider; baseUrl: string; items: ModelConfig[] }>>((groups, model) => {
+        const baseUrl = model.base_url || t('status.local')
+        const key = `${model.provider}:${baseUrl}`
+        if (!groups[key]) groups[key] = { provider: model.provider, baseUrl, items: [] }
+        groups[key].items.push(model)
+        return groups
+      }, {}),
+    )
+
     return (
       <section className="models-page">
-        <div className="preset-strip">
-          {modelPresets.map((preset) => (
-            <button key={preset.name} className="preset-button" onClick={() => applyPreset(preset)}>
-              <strong>{preset.name}</strong>
-              <span>{t(preset.noteKey)}</span>
-            </button>
-          ))}
+        <div className="model-page-title">
+          <div>
+            <h2>{t('models.title')}</h2>
+            <p>{t('models.subtitle')}</p>
+          </div>
+          <span>{t('models.selectedCount', { count: selectedDiscoveryIds.length })}</span>
         </div>
 
-        <div className="two-column-page flush">
-          <form className="panel stacked-form" onSubmit={handleCreateModel}>
+        <div className="model-workbench">
+          <aside className="model-platform-panel">
             <div className="section-heading">
-              <Settings2 size={17} />
-              <span>{t('models.endpoint')}</span>
+              <Layers3 size={17} />
+              <span>{t('models.platforms')}</span>
             </div>
-            <input value={modelForm.name} onChange={(event) => setModelForm({ ...modelForm, name: event.target.value })} placeholder={t('models.displayName')} />
-            <select value={modelForm.provider} onChange={(event) => setModelForm({ ...modelForm, provider: event.target.value as ModelConfig['provider'] })}>
-              <option value="local">{t('models.provider.local')}</option>
-              <option value="ollama">{t('models.provider.ollama')}</option>
-              <option value="openai_compatible">{t('models.provider.openai')}</option>
-              <option value="anthropic">{t('models.provider.anthropic')}</option>
-              <option value="google">{t('models.provider.google')}</option>
-            </select>
-            <input value={modelForm.model} onChange={(event) => setModelForm({ ...modelForm, model: event.target.value })} placeholder={t('models.modelId')} />
-            <input value={modelForm.base_url} onChange={(event) => setModelForm({ ...modelForm, base_url: event.target.value })} placeholder={t('models.baseUrl')} />
-            <input type="password" value={modelForm.api_key} onChange={(event) => setModelForm({ ...modelForm, api_key: event.target.value })} placeholder={t('models.apiKey')} />
-            <label className="range-row">
-              <span>{t('models.temperature')}</span>
-              <input type="range" min="0" max="1" step="0.1" value={modelForm.temperature} onChange={(event) => setModelForm({ ...modelForm, temperature: Number(event.target.value) })} />
-              <strong>{modelForm.temperature}</strong>
-            </label>
-            <button className="primary-button" type="submit">
-              <Plus size={16} />
-              {t('models.save')}
-            </button>
-          </form>
+            <div className="model-platform-list">
+              {modelPlatforms.map((platform) => (
+                <button
+                  key={platform.id}
+                  className={platform.id === modelForm.platformId ? 'model-platform active' : 'model-platform'}
+                  onClick={() => selectModelPlatform(platform)}
+                >
+                  <strong>{platform.name}</strong>
+                  <span>{t(platform.noteKey)}</span>
+                  <small>{providerLabel(platform.provider)}</small>
+                </button>
+              ))}
+            </div>
+          </aside>
 
-          <div className="panel wide">
+          <section className="model-builder-panel">
+            <div className="model-connection-bar">
+              <div className="section-heading">
+                <Settings2 size={17} />
+                <span>{t('models.connection')}</span>
+              </div>
+              <div className="model-form-grid">
+                <label>
+                  <span>{t('models.providerLabel')}</span>
+                  <select value={modelForm.provider} onChange={(event) => setModelForm({ ...modelForm, provider: event.target.value as ModelProvider })}>
+                    <option value="local">{t('models.provider.local')}</option>
+                    <option value="ollama">{t('models.provider.ollama')}</option>
+                    <option value="openai_compatible">{t('models.provider.openai')}</option>
+                    <option value="anthropic">{t('models.provider.anthropic')}</option>
+                    <option value="google">{t('models.provider.google')}</option>
+                  </select>
+                </label>
+                <label className="span-2">
+                  <span>{t('models.baseUrl')}</span>
+                  <input
+                    value={modelForm.base_url}
+                    onChange={(event) => setModelForm({ ...modelForm, base_url: event.target.value })}
+                    placeholder={activePlatform.base_url || 'https://api.example.com/v1'}
+                    disabled={modelForm.provider === 'local'}
+                  />
+                </label>
+                <label className="span-2">
+                  <span>{t('models.apiKey')}</span>
+                  <input
+                    type="password"
+                    value={modelForm.api_key}
+                    onChange={(event) => setModelForm({ ...modelForm, api_key: event.target.value })}
+                    placeholder={t('models.apiKey')}
+                    disabled={modelForm.provider === 'local' || modelForm.provider === 'ollama'}
+                  />
+                </label>
+                <label className="range-row span-2">
+                  <span>{t('models.temperature')}</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={modelForm.temperature}
+                    onChange={(event) => setModelForm({ ...modelForm, temperature: Number(event.target.value) })}
+                  />
+                  <strong>{modelForm.temperature}</strong>
+                </label>
+              </div>
+              <div className="model-actions-row">
+                <button className="primary-button" type="button" onClick={handleDiscoverModels} disabled={isDiscoveringModels}>
+                  {isDiscoveringModels ? <Loader2 size={16} className="spin" /> : <RefreshCcw size={16} />}
+                  {isDiscoveringModels ? t('models.discovering') : t('models.discover')}
+                </button>
+                <p className="muted">{t('models.apiKeyHint')}</p>
+              </div>
+            </div>
+
+            <div className="model-discovery-panel">
+              <div className="section-heading split">
+                <span>{t('models.discovery')}</span>
+                <small>{t('models.discoveredCount', { count: discoveredModels.length })}</small>
+              </div>
+
+              <div className="manual-model-row">
+                <input
+                  value={modelForm.manual_model}
+                  onChange={(event) => setModelForm({ ...modelForm, manual_model: event.target.value })}
+                  placeholder={t('models.manualModel')}
+                />
+                <button className="secondary-button" type="button" onClick={handleAddManualModel}>
+                  <Plus size={16} />
+                  {t('models.addManual')}
+                </button>
+              </div>
+
+              <div className="model-picker-list">
+                {discoveredModels.length === 0 && <p className="muted">{t('models.noDiscovered')}</p>}
+                {discoveredModels.map((model) => {
+                  const selected = selectedDiscoveryIds.includes(model.id)
+                  return (
+                    <button key={model.id} className={selected ? 'model-picker active' : 'model-picker'} onClick={() => toggleDiscoveredModel(model.id)}>
+                      <span>{selected && <Check size={14} />}</span>
+                      <div>
+                        <strong>{model.id}</strong>
+                        {model.name && model.name !== model.id && <small>{model.name}</small>}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="default-model-row">
+                <label>
+                  <span>{t('models.defaultStartup')}</span>
+                  <select
+                    value={modelForm.default_model}
+                    onChange={(event) => setModelForm({ ...modelForm, default_model: event.target.value })}
+                    disabled={selectedDiscoveryIds.length === 0}
+                  >
+                    <option value="">{t('models.defaultStartupPlaceholder')}</option>
+                    {selectedDiscoveryIds.map((modelId) => (
+                      <option key={modelId} value={modelId}>
+                        {modelId}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className="primary-button" type="button" onClick={handleSaveSelectedModels} disabled={selectedDiscoveryIds.length === 0}>
+                  <Plus size={16} />
+                  {t('models.saveSelected')}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="model-configured-panel">
             <div className="section-heading split">
               <span>{t('models.configured')}</span>
               <small>{t('models.endpointCount', { count: models.length })}</small>
             </div>
-            <div className="model-list">
-              {models.map((model) => (
-                <div className="model-row" key={model.id}>
-                  <div>
-                    <strong>{displayModelName(model.name)}</strong>
-                    <span>{t(providerLabels[model.provider])} / {model.model}</span>
-                    {model.base_url && <small>{model.base_url}</small>}
+            <div className="configured-models">
+              {modelGroups.length === 0 && <p className="muted">{t('models.emptyConfigured')}</p>}
+              {modelGroups.map((group) => (
+                <div className="model-config-group" key={`${group.provider}-${group.baseUrl}`}>
+                  <div className="model-group-heading">
+                    <strong>{providerLabel(group.provider)}</strong>
+                    <span>{group.baseUrl}</span>
                   </div>
-                  <div className="row-actions">
-                    <button className={model.enabled ? 'chip active' : 'chip'} onClick={() => patchModel(model.id, { enabled: !model.enabled })}>
-                      {model.enabled ? t('common.enabled') : t('common.disabled')}
-                    </button>
-                    <button className={model.is_default ? 'chip active' : 'chip'} onClick={() => patchModel(model.id, { is_default: true })}>
-                      <Check size={14} />
-                      {t('common.default')}
-                    </button>
-                  </div>
+                  {group.items.map((model) => {
+                    const draft = modelDrafts[model.id]
+                    const isEditing = editingModelId === model.id && draft
+                    if (isEditing) {
+                      return (
+                        <div className="model-row editing" key={model.id}>
+                          <div className="model-edit-grid">
+                            <input value={draft.name} onChange={(event) => updateModelDraft(model.id, { name: event.target.value })} placeholder={t('models.displayName')} />
+                            <select value={draft.provider} onChange={(event) => updateModelDraft(model.id, { provider: event.target.value as ModelProvider })}>
+                              <option value="local">{t('models.provider.local')}</option>
+                              <option value="ollama">{t('models.provider.ollama')}</option>
+                              <option value="openai_compatible">{t('models.provider.openai')}</option>
+                              <option value="anthropic">{t('models.provider.anthropic')}</option>
+                              <option value="google">{t('models.provider.google')}</option>
+                            </select>
+                            <input value={draft.base_url} onChange={(event) => updateModelDraft(model.id, { base_url: event.target.value })} placeholder={t('models.baseUrl')} />
+                            <select value={draft.model} onChange={(event) => updateModelDraft(model.id, { model: event.target.value })}>
+                              <option value={draft.model}>{draft.model}</option>
+                              {draft.discovered.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.id}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="password"
+                              value={draft.api_key}
+                              onChange={(event) => updateModelDraft(model.id, { api_key: event.target.value })}
+                              placeholder={model.api_key_set ? t('models.keySet') : t('models.apiKey')}
+                            />
+                            <label className="range-row compact-range">
+                              <span>{t('models.temperature')}</span>
+                              <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.1"
+                                value={draft.temperature}
+                                onChange={(event) => updateModelDraft(model.id, { temperature: Number(event.target.value) })}
+                              />
+                              <strong>{draft.temperature}</strong>
+                            </label>
+                          </div>
+                          <div className="row-actions">
+                            <button className="secondary-button" type="button" onClick={() => discoverDraftModels(model)} disabled={refreshingModelId === model.id}>
+                              {refreshingModelId === model.id ? <Loader2 size={15} className="spin" /> : <RefreshCcw size={15} />}
+                              {t('models.refreshOne')}
+                            </button>
+                            <button className="primary-button" type="button" onClick={() => saveEditedModel(model)}>
+                              <Check size={15} />
+                              {t('common.save')}
+                            </button>
+                            <button className="icon-button" type="button" title={t('common.cancel')} onClick={() => setEditingModelId(null)}>
+                              <X size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    }
+                    return (
+                      <div className="model-row" key={model.id}>
+                        <div className="model-row-main">
+                          <strong>{displayModelName(model.name)}</strong>
+                          <span>{modelOptionLabel(model)}</span>
+                          <small>{model.base_url || t('status.local')}</small>
+                        </div>
+                        <div className="row-actions">
+                          <span className={model.api_key_set ? 'key-state active' : 'key-state'}>{model.api_key_set ? t('models.keySet') : t('models.keyMissing')}</span>
+                          <button className={model.enabled ? 'chip active' : 'chip'} onClick={() => patchModel(model.id, { enabled: !model.enabled })}>
+                            {model.enabled ? t('common.enabled') : t('common.disabled')}
+                          </button>
+                          <button className={model.is_default ? 'chip active' : 'chip'} onClick={() => patchModel(model.id, { is_default: true, enabled: true })}>
+                            <Check size={14} />
+                            {t('common.default')}
+                          </button>
+                          <button className="icon-button" type="button" title={t('models.edit')} onClick={() => startEditModel(model)}>
+                            <Pencil size={16} />
+                          </button>
+                          <button className="icon-button danger" type="button" title={t('models.delete')} onClick={() => deleteModel(model.id)}>
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         </div>
       </section>
     )

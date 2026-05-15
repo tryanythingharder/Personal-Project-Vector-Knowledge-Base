@@ -74,21 +74,26 @@ docker compose up --build
 
 ## 模型配置
 
+“模型”页面现在按平台管理连接：先选择 OpenAI / GPT、Ollama、DeepSeek、Qwen、Kimi、OpenRouter、Anthropic 或 Google，填写 Base URL 和可选 API Key，然后点击“获取模型列表”。Kortex 会从对应端点拉取可用模型，用户只需要勾选想在聊天框里切换的模型，并选择默认启动模型。
+
+如果某个厂商不支持模型列表接口，也可以手动输入模型 ID。API Key 可以在添加模型时填写，也可以后续在已配置模型列表中行内编辑。
+
 ### Ollama
 
 1. 本机启动 Ollama。
 2. 拉取模型，例如 `ollama pull qwen2.5:7b`。
-3. 在 Kortex 的“模型”页面启用 Ollama 预设，确认 Base URL 为 `http://localhost:11434`。
+3. 在 Kortex 的“模型”页面选择 Ollama，确认 Base URL 为 `http://localhost:11434`。
+4. 点击“获取模型列表”，勾选要启用的本地模型。
 
 ### 云模型
 
-在“模型”页面启用或新增以下供应商：
+在“模型”页面选择或新增以下供应商：
 
 - OpenAI-compatible：OpenAI、DeepSeek、Qwen DashScope 兼容模式、Kimi、OpenRouter。
 - Anthropic：Claude Messages API。
 - Google：Gemini Generative Language API。
 
-API Key 默认保存在当前后端的本地数据库中。如果使用远程后端，请在共享后端上配置模型密钥。
+API Key 默认保存在当前后端的本地数据库中，不会在界面列表里明文显示。如果使用远程后端，请在共享后端上配置模型密钥。
 
 ## 适合入库的内容
 

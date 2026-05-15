@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from .database import UPLOAD_DIR, get_conn, init_db, now_iso, row_to_dict, rows_to_dicts
 from .document_loader import extract_text, split_text
-from .providers import ModelCallError, generate_with_model
+from .providers import ModelCallError, ModelDiscoveryError, discover_models, generate_with_model
 from .rag import build_citations, build_llm_messages, citations_to_json, local_answer, retrieve_context
 from .vectorizer import dumps_vector, embed
 
@@ -57,6 +57,12 @@ class ModelConfigPatch(BaseModel):
     temperature: float | None = None
     enabled: bool | None = None
     is_default: bool | None = None
+
+
+class ModelDiscoveryRequest(BaseModel):
+    provider: str = Field(pattern=PROVIDER_PATTERN)
+    base_url: str = ""
+    api_key: str = ""
 
 
 class ChatRequest(BaseModel):
@@ -238,6 +244,17 @@ def list_models() -> list[dict[str, Any]]:
     return [_public_model(row) for row in rows]
 
 
+@app.post("/api/models/discover")
+async def discover_model_options(payload: ModelDiscoveryRequest) -> dict[str, Any]:
+    try:
+        models = await discover_models(payload.provider, payload.base_url, payload.api_key)
+    except ModelDiscoveryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)[:600]) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Model discovery failed: {str(exc)[:600]}") from exc
+    return {"models": models}
+
+
 @app.post("/api/models")
 def create_model(payload: ModelConfigIn) -> dict[str, Any]:
     now = now_iso()
@@ -287,6 +304,23 @@ def patch_model(model_id: int, payload: ModelConfigPatch) -> dict[str, Any]:
         conn.execute(f"UPDATE model_configs SET {assignments} WHERE id = ?", [*values, model_id])
         row = row_to_dict(conn.execute("SELECT * FROM model_configs WHERE id = ?", (model_id,)).fetchone()) or {}
         return _public_model(row)
+
+
+@app.delete("/api/models/{model_id}")
+def delete_model(model_id: int) -> dict[str, bool]:
+    with get_conn() as conn:
+        existing = conn.execute("SELECT * FROM model_configs WHERE id = ?", (model_id,)).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Model not found")
+        was_default = bool(existing["is_default"])
+        conn.execute("DELETE FROM model_configs WHERE id = ?", (model_id,))
+        if was_default:
+            replacement = conn.execute(
+                "SELECT id FROM model_configs WHERE enabled = 1 ORDER BY id ASC LIMIT 1"
+            ).fetchone()
+            if replacement is not None:
+                conn.execute("UPDATE model_configs SET is_default = 1 WHERE id = ?", (replacement["id"],))
+    return {"ok": True}
 
 
 @app.post("/api/chat")

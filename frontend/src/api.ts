@@ -3,8 +3,10 @@ import type {
   Citation,
   ConversationDetail,
   ConversationSummary,
+  DiscoveredModel,
   DocumentItem,
   ModelConfig,
+  ModelDiscoveryRequest,
   Project,
 } from './types'
 
@@ -54,10 +56,13 @@ export const api = {
   },
   deleteDocument: (id: number) => request<{ ok: boolean }>(`/api/documents/${id}`, { method: 'DELETE' }),
   models: () => request<ModelConfig[]>('/api/models'),
+  discoverModels: (payload: ModelDiscoveryRequest) =>
+    request<{ models: DiscoveredModel[] }>('/api/models/discover', { method: 'POST', body: JSON.stringify(payload) }),
   createModel: (payload: Partial<ModelConfig> & { api_key?: string }) =>
     request<ModelConfig>('/api/models', { method: 'POST', body: JSON.stringify(payload) }),
   patchModel: (id: number, payload: Partial<ModelConfig> & { api_key?: string }) =>
     request<ModelConfig>(`/api/models/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteModel: (id: number) => request<{ ok: boolean }>(`/api/models/${id}`, { method: 'DELETE' }),
   chat: (payload: {
     message: string
     project_id?: number

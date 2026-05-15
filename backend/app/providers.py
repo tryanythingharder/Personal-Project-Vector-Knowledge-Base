@@ -11,6 +11,29 @@ class ModelCallError(RuntimeError):
     """Raised when a configured model provider cannot return a usable answer."""
 
 
+class ModelDiscoveryError(RuntimeError):
+    """Raised when a provider cannot list available models."""
+
+
+async def discover_models(provider: str, base_url: str = "", api_key: str = "") -> list[dict[str, str]]:
+    if provider == "local":
+        return [{"id": "extractive-rag", "name": "Local retrieval answer"}]
+
+    if provider == "ollama":
+        return await _discover_ollama(base_url)
+
+    if provider == "openai_compatible":
+        return await _discover_openai_compatible(base_url, api_key)
+
+    if provider == "anthropic":
+        return await _discover_anthropic(base_url, api_key)
+
+    if provider == "google":
+        return await _discover_google(base_url, api_key)
+
+    raise ModelDiscoveryError(f"Unsupported provider: {provider}")
+
+
 async def generate_with_model(
     model_config: dict[str, Any],
     messages: list[dict[str, str]],
@@ -36,6 +59,94 @@ async def generate_with_model(
     raise ModelCallError(f"Unsupported provider: {provider}")
 
 
+def _openai_base_url(base_url: str) -> str:
+    normalized = (base_url or "https://api.openai.com/v1").rstrip("/")
+    if normalized.endswith("/chat/completions"):
+        return normalized[: -len("/chat/completions")]
+    if normalized.endswith("/models"):
+        return normalized[: -len("/models")]
+    return normalized
+
+
+async def _discover_ollama(base_url: str) -> list[dict[str, str]]:
+    normalized = (base_url or "http://localhost:11434").rstrip("/")
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.get(f"{normalized}/api/tags")
+        if response.status_code >= 400:
+            raise ModelDiscoveryError(response.text)
+        data = response.json()
+    models = []
+    for item in data.get("models", []):
+        model_id = item.get("name") or item.get("model")
+        if model_id:
+            models.append({"id": model_id, "name": model_id})
+    return models
+
+
+async def _discover_openai_compatible(base_url: str, api_key: str) -> list[dict[str, str]]:
+    normalized = _openai_base_url(base_url)
+    headers = {"Accept": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    async with httpx.AsyncClient(timeout=25) as client:
+        response = await client.get(f"{normalized}/models", headers=headers)
+        if response.status_code >= 400:
+            raise ModelDiscoveryError(response.text)
+        data = response.json()
+
+    items = data.get("data", []) if isinstance(data, dict) else data
+    models = []
+    for item in items:
+        model_id = item.get("id") if isinstance(item, dict) else str(item)
+        if model_id:
+            models.append({"id": model_id, "name": str(item.get("name") or model_id) if isinstance(item, dict) else model_id})
+    return models
+
+
+async def _discover_anthropic(base_url: str, api_key: str) -> list[dict[str, str]]:
+    normalized = (base_url or "https://api.anthropic.com/v1").rstrip("/")
+    headers = {
+        "Accept": "application/json",
+        "anthropic-version": "2023-06-01",
+    }
+    if api_key:
+        headers["x-api-key"] = api_key
+
+    async with httpx.AsyncClient(timeout=25) as client:
+        response = await client.get(f"{normalized}/models", headers=headers)
+        if response.status_code >= 400:
+            raise ModelDiscoveryError(response.text)
+        data = response.json()
+
+    models = []
+    for item in data.get("data", []):
+        model_id = item.get("id")
+        if model_id:
+            models.append({"id": model_id, "name": item.get("display_name") or model_id})
+    return models
+
+
+async def _discover_google(base_url: str, api_key: str) -> list[dict[str, str]]:
+    normalized = (base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+    params = {"key": api_key} if api_key else {}
+    async with httpx.AsyncClient(timeout=25) as client:
+        response = await client.get(f"{normalized}/models", params=params)
+        if response.status_code >= 400:
+            raise ModelDiscoveryError(response.text)
+        data = response.json()
+
+    models = []
+    for item in data.get("models", []):
+        supported = item.get("supportedGenerationMethods", [])
+        if supported and "generateContent" not in supported:
+            continue
+        model_id = (item.get("name") or "").removeprefix("models/")
+        if model_id:
+            models.append({"id": model_id, "name": item.get("displayName") or model_id})
+    return models
+
+
 async def _call_ollama(model_config: dict[str, Any], messages: list[dict[str, str]]) -> str:
     base_url = (model_config.get("base_url") or "http://localhost:11434").rstrip("/")
     payload = {
@@ -53,7 +164,7 @@ async def _call_ollama(model_config: dict[str, Any], messages: list[dict[str, st
 
 
 async def _call_openai_compatible(model_config: dict[str, Any], messages: list[dict[str, str]]) -> str:
-    base_url = (model_config.get("base_url") or "https://api.openai.com/v1").rstrip("/")
+    base_url = _openai_base_url(model_config.get("base_url") or "https://api.openai.com/v1")
     api_key = model_config.get("api_key") or ""
     headers = {"Content-Type": "application/json"}
     if api_key:

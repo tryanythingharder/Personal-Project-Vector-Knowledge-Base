@@ -21,16 +21,29 @@ export type DocumentItem = {
   created_at: string
 }
 
+export type ModelProvider = 'local' | 'ollama' | 'openai_compatible' | 'anthropic' | 'google'
+
 export type ModelConfig = {
   id: number
   name: string
-  provider: 'local' | 'ollama' | 'openai_compatible' | 'anthropic' | 'google'
+  provider: ModelProvider
   model: string
   base_url: string
   temperature: number
   enabled: boolean
   is_default: boolean
   api_key_set: boolean
+}
+
+export type ModelDiscoveryRequest = {
+  provider: ModelProvider
+  base_url?: string
+  api_key?: string
+}
+
+export type DiscoveredModel = {
+  id: string
+  name?: string
 }
 
 export type Citation = {

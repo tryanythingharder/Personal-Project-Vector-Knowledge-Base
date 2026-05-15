@@ -74,21 +74,26 @@ Open `http://127.0.0.1:8080`. SQLite data and uploaded files are stored in the `
 
 ## Model Setup
 
+The Models view now works as a provider connection manager. Pick OpenAI / GPT, Ollama, DeepSeek, Qwen, Kimi, OpenRouter, Anthropic, or Google, enter the Base URL and optional API key, then click **Fetch model list**. Kortex lists the models returned by that endpoint, and you can choose exactly which models appear in the chat switcher plus the default startup model.
+
+If a provider does not expose a model-list endpoint, add the model id manually. API keys can be added when saving the model or later from the inline editor in the configured model list.
+
 ### Ollama
 
 1. Start Ollama locally.
 2. Pull a model such as `ollama pull qwen2.5:7b`.
-3. Enable the Ollama preset in the Models view and confirm the base URL is `http://localhost:11434`.
+3. Choose Ollama in the Models view and confirm the base URL is `http://localhost:11434`.
+4. Click **Fetch model list** and select the local models you want enabled.
 
 ### Cloud Providers
 
-Use the Models view to enable or add providers:
+Use the Models view to choose or add providers:
 
 - OpenAI-compatible: OpenAI, DeepSeek, Qwen DashScope compatible mode, Kimi, and OpenRouter.
 - Anthropic: Claude via the Messages API.
 - Google: Gemini via the Generative Language API.
 
-API keys are stored in the current backend database. When using a remote backend, configure keys on that shared backend.
+API keys are stored in the current backend database and are not shown in plaintext in the list UI. When using a remote backend, configure keys on that shared backend.
 
 ## Good Content To Store
 
