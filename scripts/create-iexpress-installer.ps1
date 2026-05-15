@@ -57,14 +57,26 @@ New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 Expand-Archive -LiteralPath $zipPath -DestinationPath $tempDir -Force
 
 if (Test-Path $installDir) {
+  Get-CimInstance Win32_Process | Where-Object {
+    $_.ExecutablePath -and $_.ExecutablePath.StartsWith($installDir, [System.StringComparison]::OrdinalIgnoreCase)
+  } | ForEach-Object {
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+  }
+  Start-Sleep -Milliseconds 800
   Remove-Item -LiteralPath $installDir -Recurse -Force
 }
 
 Move-Item -LiteralPath $tempDir -Destination $installDir
 
 $exePath = Join-Path $installDir "Kortex.exe"
-New-AppShortcut -ShortcutPath (Join-Path $desktopDir "Kortex.lnk") -TargetPath $exePath
-New-AppShortcut -ShortcutPath (Join-Path $startMenuDir "Kortex.lnk") -TargetPath $exePath
+$desktopShortcut = Join-Path $desktopDir "Kortex.lnk"
+$startMenuShortcut = Join-Path $startMenuDir "Kortex.lnk"
+New-AppShortcut -ShortcutPath $desktopShortcut -TargetPath $exePath
+New-AppShortcut -ShortcutPath $startMenuShortcut -TargetPath $exePath
+
+if (-not (Test-Path -LiteralPath $desktopShortcut)) {
+  Copy-Item -LiteralPath $startMenuShortcut -Destination $desktopShortcut -Force
+}
 
 $uninstallPath = Join-Path $installDir "Uninstall Kortex.ps1"
 $uninstallScript = @"
@@ -88,15 +100,15 @@ SEDVersion=3
 [Options]
 PackagePurpose=InstallApp
 ShowInstallProgramWindow=0
-HideExtractAnimation=1
+HideExtractAnimation=0
 UseLongFileName=1
 InsideCompressed=0
 CAB_FixedSize=0
 CAB_ResvCodeSigning=0
 RebootMode=N
-InstallPrompt=
+InstallPrompt=Install Kortex desktop app? This will replace the current local Kortex installation.
 DisplayLicense=
-FinishMessage=
+FinishMessage=Kortex has been installed. Use the desktop shortcut or Start menu to open it.
 TargetName=$targetInTemp
 FriendlyName=Kortex
 AppLaunched=$powershellExe -NoProfile -ExecutionPolicy Bypass -File install.ps1
