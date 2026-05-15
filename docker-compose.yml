@@ -1,0 +1,21 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8010:8000"
+    volumes:
+      - kb_data:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  kb_data:

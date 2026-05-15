@@ -1,0 +1,67 @@
+{
+  "name": "project-knowledge-agent",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main.cjs",
+  "author": "ProjectVault",
+  "description": "Desktop-first project knowledge base Agent with local RAG, chat history, model switching, admin views, and Docker deployment.",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "cd backend && ..\\.venv\\Scripts\\python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010",
+    "dev:frontend": "npm --workspace project-knowledge-agent-frontend run dev -- --host 127.0.0.1 --port 5180",
+    "dev": "concurrently -k \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "desktop": "concurrently -k \"npm:dev:backend\" \"npm:dev:frontend\" \"wait-on http://127.0.0.1:5180 && electron electron/main.cjs\"",
+    "build:frontend": "npm --workspace project-knowledge-agent-frontend run build",
+    "build:backend": ".\\.venv\\Scripts\\pyinstaller --noconfirm --clean --onefile --name projectvault-backend --paths backend --collect-submodules app --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --distpath dist\\backend --workpath build\\pyinstaller --specpath build\\pyinstaller backend\\run_backend.py",
+    "build:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\create-iexpress-installer.ps1",
+    "build:desktop": "npm run build:frontend && npm run build:backend && electron-builder --dir && npm run build:installer",
+    "build:desktop:unpacked": "npm run build:frontend && npm run build:backend && electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.projectvault.agent",
+    "productName": "ProjectVault Agent",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/backend/projectvault-backend.exe",
+        "to": "backend/projectvault-backend.exe"
+      },
+      {
+        "from": "frontend/dist",
+        "to": "frontend"
+      }
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ProjectVault Agent"
+    }
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "electron": "^42.1.0",
+    "electron-builder": "^26.0.12",
+    "wait-on": "^8.0.1"
+  }
+}
