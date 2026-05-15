@@ -118,12 +118,36 @@ button {
   background: rgba(255, 255, 255, 0.075);
 }
 
+.sidebar-bottom {
+  display: grid;
+  gap: 9px;
+  margin-top: auto;
+}
+
+.settings-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: #a8aca5;
+  background: transparent;
+  cursor: pointer;
+}
+
+.settings-button:hover,
+.settings-button.active {
+  color: #f7f5ed;
+  background: rgba(255, 255, 255, 0.075);
+}
+
 .sidebar-footer {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  margin-top: auto;
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
@@ -593,7 +617,8 @@ select option {
 .two-column-page,
 .admin-page,
 .models-page,
-.server-page {
+.server-page,
+.settings-page {
   padding: 18px;
 }
 
@@ -819,6 +844,72 @@ select option {
   letter-spacing: 0;
 }
 
+.settings-page {
+  display: grid;
+  align-content: start;
+}
+
+.settings-panel {
+  display: grid;
+  gap: 14px;
+  max-width: 780px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: 13px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.settings-row div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-row strong,
+.settings-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-row span {
+  color: #969c95;
+  font-size: 13px;
+}
+
+.segmented-control {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.segmented-control button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 7px;
+  color: #a8aca5;
+  background: transparent;
+  cursor: pointer;
+}
+
+.segmented-control button.active {
+  color: #06100b;
+  background: #89e0b3;
+}
+
 .loading-line {
   display: inline-flex;
   align-items: center;
@@ -880,6 +971,10 @@ select option {
     display: none;
   }
 
+  .sidebar-bottom {
+    margin-top: 0;
+  }
+
   .topbar {
     align-items: stretch;
     flex-direction: column;
@@ -924,8 +1019,14 @@ select option {
   .two-column-page,
   .admin-page,
   .models-page,
-  .server-page {
+  .server-page,
+  .settings-page {
     padding: 12px;
+  }
+
+  .settings-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .message {

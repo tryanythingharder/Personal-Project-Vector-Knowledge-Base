@@ -1,27 +1,30 @@
 # Kortex
 
-Kortex is a desktop-first vector knowledge base for personal project memory.
-It supports document upload, local vector retrieval, RAG answers, model
-switching, conversation history, admin visibility, Docker deployment, and a
-Windows installer.
+[简体中文](README.md) | [English](README.en.md)
 
-## Features
+Kortex 是一个桌面优先的个人项目向量知识库，用来沉淀需求、交付记录、README、接口文档、部署说明、复盘经验和关键代码片段。它支持文档上传、向量化检索、RAG 问答、多模型切换、聊天记录、后台管理、远程后端模式和 Windows 安装包。
 
-- Knowledge library: upload `txt`, `md`, `pdf`, `docx`, code files, and common
-  configuration files.
-- Local-first retrieval: the default hashing retriever works without an API key.
-- RAG chat: answers include evidence snippets, source files, and similarity
-  scores.
-- Mainstream model providers: local evidence answers, Ollama, OpenAI-compatible
-  APIs, Anthropic Claude, Google Gemini, DeepSeek, Qwen, Kimi, and OpenRouter.
-- Remote backend mode: point the desktop client at a server endpoint so multiple
-  devices share the same backend and database.
-- Conversation history: sessions and messages are stored in SQLite by default.
-- Admin view: inspect project, document, chunk, session, and model counts.
-- Desktop shell: Electron launches the packaged FastAPI backend and app UI.
-- Docker deployment: run the backend and frontend together for server hosting.
+## 功能特性
 
-## Local Development
+- 文档入库：支持 `txt`、`md`、`pdf`、`docx`、源码、日志和常见配置文件。
+- 本地优先检索：默认 hashing 向量检索无需 API Key，可离线使用。
+- RAG 问答：回答附带引用片段、来源文件和相似度。
+- 多模型切换：支持本地检索回答、Ollama、OpenAI-compatible、Anthropic Claude、Google Gemini、DeepSeek、Qwen、Kimi 和 OpenRouter。
+- 远程后端模式：桌面端可指向服务器 API，多台设备共享同一个知识库和聊天记录。
+- 聊天记录：会话与消息默认存储在 SQLite。
+- 后台管理：查看项目、文档、切片、会话和模型数量。
+- 桌面程序：Electron 启动内置 FastAPI 后端和可视化界面。
+- Docker 部署：可把后端和前端部署到服务器。
+
+## 技术栈
+
+- Desktop：Electron
+- Frontend：React + Vite + TypeScript
+- Backend：FastAPI + Python
+- Packaging：PyInstaller + electron-builder + NSIS
+- Database：SQLite，后续可升级 PostgreSQL + pgvector
+
+## 本地开发
 
 ```powershell
 python -m venv .venv
@@ -30,39 +33,36 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-Frontend: `http://127.0.0.1:5180`
+前端地址：`http://127.0.0.1:5180`
 
-Backend health: `http://127.0.0.1:8010/api/health`
+后端健康检查：`http://127.0.0.1:8010/api/health`
 
-## Desktop App
+## 桌面开发模式
 
 ```powershell
 npm.cmd run desktop
 ```
 
-This starts FastAPI, Vite, and the Electron desktop window together.
+这个命令会同时启动 FastAPI、Vite 和 Electron 桌面窗口。
 
-## Windows Installer
+## Windows 安装包
 
 ```powershell
 npm.cmd run build:desktop
 ```
 
-The installer is generated at `release/Kortex-Setup-0.1.0.exe`. After
-installation, Kortex is available from the desktop shortcut and Start menu.
+安装包会生成到 `release/Kortex-Setup-0.1.0.exe`。安装后可以从桌面快捷方式或开始菜单打开 Kortex。
 
-## Remote Backend
+> 如果安装包所在路径包含中文导致 NSIS 安装器异常，可把安装包复制到纯英文路径后再运行，例如 `C:\Users\Administrator\Desktop\Kortex-Setup-0.1.0.exe`。
 
-The desktop app can run in two modes:
+## 远程后端
 
-- Embedded mode: Electron starts the local packaged backend automatically.
-- Remote mode: open the Server view and set the API endpoint, for example
-  `https://kb.example.com`.
+Kortex 桌面端支持两种模式：
 
-For production server use, deploy the backend with Docker or a process manager
-and point every desktop client at the same endpoint. SQLite is fine for a single
-small deployment, while PostgreSQL plus pgvector is the recommended next step
-for multi-user or larger document collections.
+- 内置模式：Electron 自动启动本机打包后的 FastAPI 后端。
+- 远程模式：在桌面端的“服务器”页面填写 API 地址，例如 `https://kb.example.com`。
+
+服务器部署时，可以先用 SQLite + 持久化磁盘满足个人使用。后续如果需要多设备、大规模文档或多人协作，推荐升级为 PostgreSQL + pgvector。
 
 ## Docker
 
@@ -70,34 +70,29 @@ for multi-user or larger document collections.
 docker compose up --build
 ```
 
-Open `http://127.0.0.1:8080`. SQLite data and uploaded files are stored in the
-`kb_data` Docker volume.
+访问 `http://127.0.0.1:8080`。SQLite 数据和上传文件会保存在 Docker volume `kb_data`。
 
-## Model Setup
+## 模型配置
 
 ### Ollama
 
-1. Start Ollama locally.
-2. Pull a model such as `ollama pull qwen2.5:7b`.
-3. Enable the Ollama preset in the Models view and confirm the base URL is
-   `http://localhost:11434`.
+1. 本机启动 Ollama。
+2. 拉取模型，例如 `ollama pull qwen2.5:7b`。
+3. 在 Kortex 的“模型”页面启用 Ollama 预设，确认 Base URL 为 `http://localhost:11434`。
 
-### Cloud Providers
+### 云模型
 
-Use the Models view to enable or add providers:
+在“模型”页面启用或新增以下供应商：
 
-- OpenAI-compatible: OpenAI, DeepSeek, Qwen DashScope compatible mode, Kimi, and
-  OpenRouter.
-- Anthropic: Claude via the Messages API.
-- Google: Gemini via the Generative Language API.
+- OpenAI-compatible：OpenAI、DeepSeek、Qwen DashScope 兼容模式、Kimi、OpenRouter。
+- Anthropic：Claude Messages API。
+- Google：Gemini Generative Language API。
 
-API keys are stored in the local application database for the current backend.
-When using a remote backend, configure keys on that shared backend.
+API Key 默认保存在当前后端的本地数据库中。如果使用远程后端，请在共享后端上配置模型密钥。
 
-## Good Content To Store
+## 适合入库的内容
 
-- Requirements, proposals, task briefs, acceptance notes, and retrospectives.
-- README files, API docs, database designs, deployment notes, and architecture
-  decisions.
-- Client feedback, change records, and project handoff notes.
-- Important code snippets or module explanations.
+- 需求说明、开题报告、任务书、验收记录、复盘总结。
+- README、接口文档、数据库设计、部署说明、架构决策。
+- 客户反馈、修改记录、交付说明。
+- 关键代码片段和模块说明。

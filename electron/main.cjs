@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, shell } = require('electron')
+const { app, BrowserWindow, Menu, dialog, shell } = require('electron')
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const http = require('node:http')
@@ -124,6 +124,8 @@ function createWindow(url) {
 }
 
 app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null)
+
   try {
     const url = process.env.APP_URL || (app.isPackaged ? await startPackagedBackend() : 'http://127.0.0.1:5180')
     createWindow(url)
