@@ -2,22 +2,33 @@
 
 [简体中文](README.md) | [English](README.en.md)
 
-Kortex is a knowledge base Agent system for personal project memory. It supports document ingestion, vector retrieval, RAG chat, model switching, conversation history, project sharing, and remote deployment.
+Kortex is a knowledge base Agent system for personal project memory. It supports document ingestion, vector retrieval, RAG chat, multi-model switching, conversation history, project sharing, and remote deployment.
 
-It is designed for storing and reusing materials from projects you have already built, such as source code, README files, requirement documents, deployment notes, delivery records, and retrospectives.
+The goal is not just to upload files, but to turn your previous projects into a searchable, reusable project memory system.
 
 ## Features
 
-- Document upload and knowledge base ingestion
-- Folder import and file-watch sync
+- Document upload, folder import, and knowledge base ingestion
+- Folder watch and sync
 - Vector retrieval and RAG chat
 - Evidence citations and chunk preview
 - Multi-model integration and chat switching
 - Model presets and usage tracking
-- Conversation history
-- Workspace invitations and project sharing
+- Persistent conversation history
+- Workspace invitations, role levels, and project sharing
 - Local mode and remote backend mode
 - Docker / Docker Compose deployment
+
+## Use Cases
+
+Kortex works well for indexing and reusing:
+
+- project source code
+- README files and API docs
+- requirement documents and design notes
+- database design and deployment documentation
+- delivery materials and operations notes
+- client feedback and retrospectives
 
 ## Tech Stack
 
@@ -38,7 +49,7 @@ docs/       Project docs
 assets/     Static assets
 ```
 
-## Local Development
+## Quick Start
 
 ### 1. Install Dependencies
 
@@ -66,13 +77,13 @@ Default URLs:
 npm.cmd run desktop
 ```
 
-## Windows Installer
+## Build Installer
 
 ```powershell
 npm.cmd run build:desktop
 ```
 
-Installer output:
+Output:
 
 ```text
 release/Kortex-Setup-0.1.0.exe
@@ -117,23 +128,15 @@ Currently supported model sources:
 
 The Models page follows a simple flow: platform -> fetch models -> select models for the chat switcher.
 
-## Recommended Content
+## Documentation
 
-Recommended content for indexing:
-
-- Source code
-- README files
-- API documentation
-- Database design notes
-- Deployment instructions
-- Requirement documents
-- Delivery documents
-- Client feedback
-- Project retrospectives
+- [Contributing Guide](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
+- [Chinese README](README.md)
 
 ## Roadmap
 
-- Retrieval quality improvements
+- Continued retrieval quality improvements
 - Production-grade database and vector store integration
 - Auto update and rollback
 - More complete collaboration features
@@ -141,13 +144,9 @@ Recommended content for indexing:
 
 ## Contributing
 
-Contributions are welcome through:
+Issues and pull requests are welcome. Please read:
 
-- Issues
-- Pull Requests
-- UI / UX improvements
-- RAG and retrieval quality work
-- Deployment and engineering improvements
+- [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Contact
 
